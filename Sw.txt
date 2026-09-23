@@ -1,0 +1,101 @@
+// ════════════════════════════════════════════════════════════════════════════
+// SPIE North America · HSE Reporting
+// Service Worker
+//
+// Estrategia, la misma que ya te funciona en México:
+//   · El documento (index.html): NETWORK-FIRST. Siempre busca la versión nueva
+//     y solo usa la copia guardada si no hay señal. Así tus cambios se ven al
+//     instante en vez de quedarse pegados en el teléfono de alguien.
+//   · Todo lo demás (iconos, manifiesto): CACHE-FIRST. Rápido y sin datos.
+//
+// SUBE EL NÚMERO DE VERSIÓN cada vez que publiques cambios. Eso borra el caché
+// viejo de todos los teléfonos y evita el clásico "a mí me sigue saliendo lo
+// de antes".
+// ════════════════════════════════════════════════════════════════════════════
+
+const CACHE = 'spie-na-hse-v1';
+
+const BASICOS = [
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
+  './favicon-32.png',
+];
+
+// ── Instalar ────────────────────────────────────────────────────────────────
+self.addEventListener('install', (e) => {
+  self.skipWaiting();                       // la versión nueva entra de inmediato
+  e.waitUntil(
+    caches.open(CACHE).then((c) => c.addAll(BASICOS).catch(() => {}))
+  );
+});
+
+// ── Activar: tirar los cachés viejos ────────────────────────────────────────
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys()
+      .then((llaves) => Promise.all(
+        llaves.filter((k) => k !== CACHE).map((k) => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+// ── Responder a las peticiones ──────────────────────────────────────────────
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+
+  // Solo se cachean lecturas. Los envíos de reportes NUNCA pasan por aquí:
+  // de eso se encarga la cola en IndexedDB, que sí sabe reintentar.
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+
+  // Las llamadas a Supabase jamás se guardan en caché: si no hay red, la app
+  // encola el reporte. Servir una respuesta vieja de la API sería peor que
+  // no responder, porque la app creería que el envío funcionó.
+  if (url.hostname.endsWith('.supabase.co')) return;
+
+  const esDocumento =
+    req.mode === 'navigate' ||
+    url.pathname.endsWith('/') ||
+    url.pathname.endsWith('index.html');
+
+  if (esDocumento) {
+    // NETWORK-FIRST
+    e.respondWith(
+      fetch(req)
+        .then((resp) => {
+          const copia = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+          return resp;
+        })
+        .catch(() =>
+          caches.match(req).then((r) => r || caches.match('./index.html'))
+        )
+    );
+    return;
+  }
+
+  // CACHE-FIRST para lo demás
+  e.respondWith(
+    caches.match(req).then((guardado) =>
+      guardado ||
+      fetch(req)
+        .then((resp) => {
+          const copia = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+          return resp;
+        })
+        .catch(() => guardado)
+    )
+  );
+});
+
+// ── Aviso desde la app para forzar la actualización ─────────────────────────
+self.addEventListener('message', (e) => {
+  if (e.data === 'actualizar') self.skipWaiting();
+});

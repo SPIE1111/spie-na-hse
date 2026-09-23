@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1e5a">
+<title>SPIE North America HSE</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SPIE North America · HSE Reporting
+     BLOQUE 8 · Base de la aplicación del empleado
+
+     Un solo archivo, como la app de México. Aquí viven:
+       · el selector de idioma
+       · el acceso con número de 4 dígitos + nombre
+       · la elección entre HSE Observation y Vehicle Inspection
+       · el Service Worker y la cola sin señal
+
+     Los dos formularios completos llegan en los bloques 9 y 10; su sitio
+     está marcado más abajo.
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<style>
+  :root {
+    --azul:        #0f1e5a;
+    --azul-claro:  #1a2f7a;
+    --rojo:        #e2001a;
+    --gris:        #6b7280;
+    --gris-claro:  #f3f4f6;
+    --linea:       #e5e7eb;
+    --verde:       #15803d;
+    --ambar:       #b45309;
+    --blanco:      #ffffff;
+    --radio:       14px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--gris-claro);
+    color: #111827;
+    font-size: 17px;
+    line-height: 1.45;
+  }
+
+  /* ── Cabecera ─────────────────────────────────────────────────────────── */
+  header {
+    background: var(--azul);
+    color: var(--blanco);
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  header img { width: 38px; height: 38px; border-radius: 9px; flex: none; }
+  header .titulo { font-weight: 700; font-size: 16px; line-height: 1.2; }
+  header .quien { font-size: 13px; opacity: .8; }
+  header .crece { flex: 1; min-width: 0; }
+
+  .btn-idioma {
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.3);
+    color: var(--blanco);
+    border-radius: 999px;
+    padding: 6px 13px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-idioma:active { background: rgba(255,255,255,.3); }
+
+  /* ── Avisos de estado ─────────────────────────────────────────────────── */
+  #barra-estado { display: none; padding: 9px 16px; font-size: 14px; font-weight: 600; text-align: center; }
+  #barra-estado.sin-red { display: block; background: #fef3c7; color: var(--ambar); }
+  #barra-estado.pendientes { display: block; background: #dbeafe; color: #1e40af; }
+
+  /* ── Pantallas ────────────────────────────────────────────────────────── */
+  main { padding: 20px 16px 40px; max-width: 560px; margin: 0 auto; }
+  .pantalla { display: none; }
+  .pantalla.activa { display: block; animation: aparecer .18s ease-out; }
+  @keyframes aparecer { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  h1 { font-size: 23px; margin: 6px 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--gris); margin: 0 0 24px; font-size: 15px; }
+
+  /* ── Botones ──────────────────────────────────────────────────────────── */
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 16px 18px;
+    border: none;
+    border-radius: var(--radio);
+    background: var(--azul);
+    color: var(--blanco);
+    font-size: 17px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: 12px;
+  }
+  .btn:active { background: var(--azul-claro); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.secundario { background: var(--blanco); color: var(--azul); border: 2px solid var(--azul); }
+  .btn.texto { background: none; color: var(--gris); font-weight: 600; font-size: 15px; padding: 10px; }
+
+  /* Tarjetas grandes para elegir idioma y tipo de reporte */
+  .tarjeta {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    padding: 20px;
+    background: var(--blanco);
+    border: 2px solid var(--linea);
+    border-radius: var(--radio);
+    margin-bottom: 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    font-size: 17px;
+    color: inherit;
+  }
+  .tarjeta:active { border-color: var(--azul); background: #f8fafc; }
+  .tarjeta .icono { font-size: 30px; line-height: 1; flex: none; }
+  .tarjeta .nombre { font-weight: 700; }
+  .tarjeta .detalle { color: var(--gris); font-size: 14px; }
+
+  /* ── Formularios ──────────────────────────────────────────────────────── */
+  label { display: block; font-weight: 700; margin: 18px 0 7px; font-size: 15px; }
+  input[type=text], input[type=tel] {
+    width: 100%;
+    padding: 14px;
+    font-size: 17px;
+    font-family: inherit;
+    border: 2px solid var(--linea);
+    border-radius: var(--radio);
+    background: var(--blanco);
+  }
+  input:focus { outline: none; border-color: var(--azul); }
+  #a-numero { letter-spacing: .35em; font-weight: 700; font-size: 26px; text-align: center; }
+
+  .error {
+    display: none;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: var(--radio);
+    padding: 13px 15px;
+    margin: 16px 0 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .error.visible { display: block; }
+
+  .aviso {
+    background: var(--blanco);
+    border: 2px dashed var(--linea);
+    border-radius: var(--radio);
+    padding: 22px;
+    text-align: center;
+    color: var(--gris);
+  }
+  .aviso b { color: #111827; display: block; margin-bottom: 6px; font-size: 17px; }
+
+  .pie { margin-top: 26px; text-align: center; color: var(--gris); font-size: 13px; }
+</style>
+</head>
+
+<body>
+
+<header>
+  <img src="./icon-192.png" alt="SPIE">
+  <div class="crece">
+    <div class="titulo">SPIE North America HSE</div>
+    <div class="quien" id="cabecera-quien"></div>
+  </div>
+  <button class="btn-idioma" id="btn-idioma" onclick="cambiarIdioma()" style="display:none">EN</button>
+</header>
+
+<div id="barra-estado"></div>
+
+<main>
+
+  <!-- ══ 1 · Elegir idioma ══════════════════════════════════════════════ -->
+  <section class="pantalla" id="p-idioma">
+    <h1>Language · Idioma</h1>
+    <p class="sub">Choose your language · Elige tu idioma</p>
+
+    <button class="tarjeta" onclick="elegirIdioma('es')">
+      <span class="icono">🇲🇽</span>
+      <span><span class="nombre">Español</span><br><span class="detalle">Continuar en español</span></span>
+    </button>
+
+    <button class="tarjeta" onclick="elegirIdioma('en')">
+      <span class="icono">🇺🇸</span>
+      <span><span class="nombre">English</span><br><span class="detalle">Continue in English</span></span>
+    </button>
+  </section>
+
+  <!-- ══ 2 · Acceso ═════════════════════════════════════════════════════ -->
+  <section class="pantalla" id="p-acceso">
+    <h1 data-t="acceso_titulo"></h1>
+    <p class="sub" data-t="acceso_sub"></p>
+
+    <label for="a-numero" data-t="acceso_numero"></label>
+    <input type="tel" id="a-numero" inputmode="numeric" maxlength="4" autocomplete="off"
+           placeholder="0000" oninput="alEscribirNumero()">
+
+    <label for="a-nombre" data-t="acceso_nombre"></label>
+    <input type="text" id="a-nombre" autocomplete="name" placeholder="" oninput="limpiarError()">
+
+    <div class="error" id="a-error"></div>
+
+    <button class="btn" id="a-btn" style="margin-top:22px" onclick="entrar()" data-t="acceso_btn"></button>
+    <p class="pie" data-t="acceso_ayuda"></p>
+  </section>
+
+  <!-- ══ 3 · Elegir tipo de reporte ═════════════════════════════════════ -->
+  <section class="pantalla" id="p-tipo">
+    <h1 data-t="tipo_titulo"></h1>
+    <p class="sub" data-t="tipo_sub"></p>
+
+    <button class="tarjeta" onclick="elegirTipo('hse')">
+      <span class="icono">⚠️</span>
+      <span><span class="nombre" data-t="tipo_hse"></span><br>
+            <span class="detalle" data-t="tipo_hse_detalle"></span></span>
+    </button>
+
+    <button class="tarjeta" onclick="elegirTipo('vehiculo')">
+      <span class="icono">🚗</span>
+      <span><span class="nombre" data-t="tipo_vehiculo"></span><br>
+            <span class="detalle" data-t="tipo_vehiculo_detalle"></span></span>
+    </button>
+
+    <button class="btn texto" onclick="salir()" data-t="salir"></button>
+  </section>
+
+  <!-- ══ 4 · Formularios · BLOQUES 9 y 10 ═══════════════════════════════ -->
+  <section class="pantalla" id="p-formulario">
+    <h1 id="f-titulo"></h1>
+    <div class="aviso">
+      <b data-t="pendiente_titulo"></b>
+      <span data-t="pendiente_texto"></span>
+    </div>
+    <button class="btn secundario" style="margin-top:20px" onclick="ir('p-tipo')" data-t="volver"></button>
+  </section>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+// 1 · CONFIGURACIÓN · lo único que tienes que rellenar
+// ══════════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+  // Project Settings → API → Project URL
+  SUPABASE_URL: 'https://tdlcvcjihvpwiomggsgo.supabase.co',
+
+  // Project Settings → API → anon public.
+  // Esta llave es PÚBLICA a propósito: por sí sola no sirve para nada, porque
+  // todo el control de acceso vive en la Edge Function y en la base de datos.
+  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6dmtyZWNocHZ4dWFjenZoZndoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTA1NzMsImV4cCI6MjA5NzM2NjU3M30.qLxLeMl7vVusb1jC4R_nQWYxdRWSB9GK-xcvbGAo-oA',
+};
+
+const API = CONFIG.SUPABASE_URL + '/functions/v1/empleado-api';
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 2 · TEXTOS DE LA APP
+//
+// Las preguntas de los formularios vienen de la base de datos, traducidas.
+// Pero estos textos —botones, avisos, errores— tienen que estar AQUÍ dentro,
+// porque la app debe poder saludarte y decirte "no hay señal" justamente
+// cuando no hay señal para ir a buscarlos.
+//
+// Para añadir francés: se copia el bloque 'en', se traduce, y se añade la
+// tarjeta en la pantalla de idioma. Lo que falte cae en inglés.
+// ══════════════════════════════════════════════════════════════════════════
+
+const TEXTOS = {
+  es: {
+    acceso_titulo:     'Identifícate',
+    acceso_sub:        'Escribe el número que te dio tu administrador y tu nombre.',
+    acceso_numero:     'Tu número de 4 dígitos',
+    acceso_nombre:     'Tu nombre completo',
+    acceso_nombre_ph:  'Como te dieron de alta',
+    acceso_btn:        'Entrar',
+    acceso_ayuda:      'Si no tienes número, pídeselo a tu administrador de HSE.',
+
+    err_incompleto:    'Escribe tu número de 4 dígitos y tu nombre.',
+    err_no_coincide:   'El número y el nombre no coinciden. Revísalos e inténtalo otra vez.',
+    err_inactivo:      'Tu cuenta está dada de baja. Habla con tu administrador de HSE.',
+    err_bloqueado:     'Demasiados intentos. Vuelve a intentarlo en unos minutos.',
+    err_sin_red:       'No hay conexión. Necesitas señal para entrar la primera vez.',
+    err_servidor:      'No se pudo conectar con el servidor. Inténtalo de nuevo.',
+
+    tipo_titulo:       '¿Qué vas a reportar?',
+    tipo_sub:          'Elige el tipo de registro.',
+    tipo_hse:          'Observación / Incidente de HSE',
+    tipo_hse_detalle:  'Condición insegura, casi accidente o incidente',
+    tipo_vehiculo:     'Inspección de Vehículo',
+    tipo_vehiculo_detalle: 'Revisión mensual del vehículo asignado',
+
+    salir:             'Salir',
+    volver:            'Volver',
+    entrando:          'Entrando…',
+
+    sin_red:           'Sin conexión · los reportes se guardarán y se enviarán solos',
+    pendientes_uno:    '1 reporte esperando señal para enviarse',
+    pendientes_varios: '{n} reportes esperando señal para enviarse',
+
+    pendiente_titulo:  'Este formulario todavía no está',
+    pendiente_texto:   'Llega en el siguiente bloque. Lo que ya funciona es el idioma, tu acceso y la elección del tipo de reporte.',
+  },
+
+  en: {
+    acceso_titulo:     'Sign in',
+    acceso_sub:        'Enter the number your administrator gave you, and your name.',
+    acceso_numero:     'Your 4-digit number',
+    acceso_nombre:     'Your full name',
+    acceso_nombre_ph:  'As you were registered',
+    acceso_btn:        'Sign in',
+    acceso_ayuda:      'No number yet? Ask your HSE administrator for one.',
+
+    err_incompleto:    'Enter your 4-digit number and your name.',
+    err_no_coincide:   'That number and name do not match. Please check and try again.',
+    err_inactivo:      'Your account is inactive. Please talk to your HSE administrator.',
+    err_bloqueado:     'Too many attempts. Please try again in a few minutes.',
+    err_sin_red:       'No connection. You need signal to sign in the first time.',
+    err_servidor:      'Could not reach the server. Please try again.',
+
+    tipo_titulo:       'What are you reporting?',
+    tipo_sub:          'Choose the type of record.',
+    tipo_hse:          'HSE Observation / Incident',
+    tipo_hse_detalle:  'Unsafe condition, near miss or incident',
+    tipo_vehiculo:     'Vehicle Inspection',
+    tipo_vehiculo_detalle: 'Monthly check of your assigned vehicle',
+
+    salir:             'Sign out',
+    volver:            'Back',
+    entrando:          'Signing in…',
+
+    sin_red:           'Offline · reports will be saved and sent automatically',
+    pendientes_uno:    '1 report waiting for signal',
+    pendientes_varios: '{n} reports waiting for signal',
+
+    pendiente_titulo:  'This form is not here yet',
+    pendiente_texto:   'It arrives in the next block. What already works: the language, your sign-in, and choosing the type of report.',
+  },
+};
+
+// Francés: se deja preparado y vacío. Lo que falte cae en inglés.
+TEXTOS.fr = {};
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 3 · ESTADO
+// ══════════════════════════════════════════════════════════════════════════
+
+let IDIOMA  = localStorage.getItem('spie_idioma') || null;
+let SESION  = null;
+let TIPO    = null;
+let CATALOGOS = null;
+
+// La zona horaria del teléfono. Se manda con cada reporte y el servidor la
+// valida contra su lista antes de fiarse de ella.
+const ZONA = (function () {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }
+  catch (e) { return ''; }
+})();
+
+function t(clave) {
+  const d = TEXTOS[IDIOMA] || {};
+  if (d[clave]) return d[clave];
+  return (TEXTOS.en[clave] !== undefined) ? TEXTOS.en[clave] : clave;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 4 · IDIOMA
+// ══════════════════════════════════════════════════════════════════════════
+
+function pintarTextos() {
+  document.documentElement.lang = IDIOMA || 'en';
+
+  document.querySelectorAll('[data-t]').forEach(function (el) {
+    el.textContent = t(el.getAttribute('data-t'));
+  });
+
+  const nombre = document.getElementById('a-nombre');
+  if (nombre) nombre.placeholder = t('acceso_nombre_ph');
+
+  const btn = document.getElementById('btn-idioma');
+  if (btn) {
+    btn.style.display = IDIOMA ? '' : 'none';
+    btn.textContent = (IDIOMA === 'es') ? 'EN' : 'ES';
+  }
+
+  pintarEstado();
+}
+
+function elegirIdioma(codigo) {
+  IDIOMA = codigo;
+  localStorage.setItem('spie_idioma', codigo);
+  pintarTextos();
+  arrancarSesion();
+}
+
+function cambiarIdioma() {
+  elegirIdioma(IDIOMA === 'es' ? 'en' : 'es');
+  CATALOGOS = null;             // se vuelven a pedir en el idioma nuevo
+  precargarCatalogos();
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 5 · NAVEGACIÓN
+// ══════════════════════════════════════════════════════════════════════════
+
+function ir(id) {
+  document.querySelectorAll('.pantalla').forEach(function (s) {
+    s.classList.remove('activa');
+  });
+  const destino = document.getElementById(id);
+  if (destino) destino.classList.add('activa');
+  window.scrollTo(0, 0);
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 6 · LLAMADAS A LA API
+// ══════════════════════════════════════════════════════════════════════════
+
+async function api(accion, extra) {
+  const cuerpo = Object.assign({ action: accion, lang: IDIOMA || 'en' }, extra || {});
+
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': CONFIG.ANON_KEY,
+      'Authorization': 'Bearer ' + CONFIG.ANON_KEY,
+    },
+    body: JSON.stringify(cuerpo),
+  });
+
+  let datos = null;
+  try { datos = await r.json(); } catch (e) { datos = null; }
+
+  if (!datos) throw new Error('respuesta-ilegible');
+  return datos;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 7 · ACCESO
+// ══════════════════════════════════════════════════════════════════════════
+
+function limpiarError() {
+  document.getElementById('a-error').classList.remove('visible');
+}
+
+function alEscribirNumero() {
+  const campo = document.getElementById('a-numero');
+  campo.value = campo.value.replace(/\D/g, '').slice(0, 4);
+  limpiarError();
+}
+
+function mostrarError(clave) {
+  const caja = document.getElementById('a-error');
+  caja.textContent = t(clave);
+  caja.classList.add('visible');
+}
+
+async function entrar() {
+  const numero = (document.getElementById('a-numero').value || '').trim();
+  const nombre = (document.getElementById('a-nombre').value || '').trim();
+
+  if (!/^[1-9][0-9]{3}$/.test(numero) || nombre.length < 3) {
+    mostrarError('err_incompleto');
+    return;
+  }
+
+  if (!navigator.onLine) {
+    mostrarError('err_sin_red');
+    return;
+  }
+
+  const boton = document.getElementById('a-btn');
+  boton.disabled = true;
+  boton.textContent = t('entrando');
+
+  try {
+    const r = await api('login', { employee_no: numero, full_name: nombre });
+
+    if (!r.ok) {
+      if (r.motivo === 'INACTIVO')        mostrarError('err_inactivo');
+      else if (r.motivo === 'BLOQUEADO')  mostrarError('err_bloqueado');
+      else                                mostrarError('err_no_coincide');
+      return;
+    }
+
+    SESION = r.empleado;
+    localStorage.setItem('spie_sesion', JSON.stringify(SESION));
+
+    // Si el empleado tiene idioma guardado y todavía no había elegido uno
+    // en este teléfono, se respeta el suyo.
+    if (SESION.lang && !localStorage.getItem('spie_idioma_manual')) {
+      if (SESION.lang !== IDIOMA && TEXTOS[SESION.lang]) {
+        IDIOMA = SESION.lang;
+        localStorage.setItem('spie_idioma', IDIOMA);
+        pintarTextos();
+      }
+    }
+
+    entrarAlPanel();
+    precargarCatalogos();
+
+  } catch (e) {
+    mostrarError(navigator.onLine ? 'err_servidor' : 'err_sin_red');
+  } finally {
+    boton.disabled = false;
+    boton.textContent = t('acceso_btn');
+  }
+}
+
+function entrarAlPanel() {
+  document.getElementById('cabecera-quien').textContent =
+    SESION.full_name + ' · ' + SESION.employee_no;
+  ir('p-tipo');
+}
+
+function salir() {
+  SESION = null;
+  localStorage.removeItem('spie_sesion');
+  document.getElementById('cabecera-quien').textContent = '';
+  document.getElementById('a-nombre').value = '';
+  ir('p-acceso');
+}
+
+function arrancarSesion() {
+  const guardada = localStorage.getItem('spie_sesion');
+  if (guardada) {
+    try {
+      SESION = JSON.parse(guardada);
+      document.getElementById('a-numero').value = SESION.employee_no || '';
+      document.getElementById('a-nombre').value = SESION.full_name || '';
+      entrarAlPanel();
+      precargarCatalogos();
+      return;
+    } catch (e) { /* si está corrupta, se pide otra vez */ }
+  }
+  ir('p-acceso');
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 8 · TIPO DE REPORTE
+// ══════════════════════════════════════════════════════════════════════════
+
+function elegirTipo(tipo) {
+  TIPO = tipo;
+  document.getElementById('f-titulo').textContent =
+    (tipo === 'hse') ? t('tipo_hse') : t('tipo_vehiculo');
+  ir('p-formulario');
+
+  // ═══ AQUÍ ENTRAN LOS FORMULARIOS ═══
+  // Bloque 9  · formulario de HSE Observation (12 preguntas)
+  // Bloque 10 · formulario de Vehicle Inspection (47 preguntas)
+  // Los dos se pintan a partir de CATALOGOS, que ya viene traducido.
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 9 · CATÁLOGOS · se guardan para poder llenar el formulario sin señal
+// ══════════════════════════════════════════════════════════════════════════
+
+async function precargarCatalogos() {
+  // Primero lo que haya guardado, para que la app sirva aunque no haya red.
+  const guardado = localStorage.getItem('spie_catalogos_' + IDIOMA);
+  if (guardado) {
+    try { CATALOGOS = JSON.parse(guardado); } catch (e) { CATALOGOS = null; }
+  }
+
+  if (!navigator.onLine) return;
+
+  try {
+    const r = await api('catalogos');
+    if (r && r.ok) {
+      CATALOGOS = r;
+      localStorage.setItem('spie_catalogos_' + IDIOMA, JSON.stringify(r));
+    }
+  } catch (e) { /* se sigue usando lo guardado */ }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 10 · COLA SIN SEÑAL · IndexedDB
+//
+// localStorage no sirve aquí: las fotos en base64 lo desbordan enseguida.
+// Los formularios de los bloques 9 y 10 dejarán aquí los reportes cuando no
+// haya red, y esta cola los irá enviando sola en cuanto vuelva la señal.
+// ══════════════════════════════════════════════════════════════════════════
+
+const BD_NOMBRE = 'spie-na-hse';
+const BD_COLA   = 'pendientes';
+
+function bdAbrir() {
+  return new Promise(function (ok, mal) {
+    const p = indexedDB.open(BD_NOMBRE, 1);
+    p.onupgradeneeded = function () {
+      const bd = p.result;
+      if (!bd.objectStoreNames.contains(BD_COLA)) {
+        bd.createObjectStore(BD_COLA, { keyPath: 'id' });
+      }
+    };
+    p.onsuccess = function () { ok(p.result); };
+    p.onerror = function () { mal(p.error); };
+  });
+}
+
+async function colaGuardar(reporte) {
+  const bd = await bdAbrir();
+  return new Promise(function (ok, mal) {
+    const tx = bd.transaction(BD_COLA, 'readwrite');
+    tx.objectStore(BD_COLA).put(reporte);
+    tx.oncomplete = function () { ok(true); };
+    tx.onerror = function () { mal(tx.error); };
+  });
+}
+
+async function colaTodos() {
+  const bd = await bdAbrir();
+  return new Promise(function (ok, mal) {
+    const salida = [];
+    const tx = bd.transaction(BD_COLA, 'readonly');
+    const cur = tx.objectStore(BD_COLA).openCursor();
+    cur.onsuccess = function (e) {
+      const c = e.target.result;
+      if (c) { salida.push(c.value); c.continue(); } else { ok(salida); }
+    };
+    cur.onerror = function () { mal(cur.error); };
+  });
+}
+
+async function colaBorrar(id) {
+  const bd = await bdAbrir();
+  return new Promise(function (ok) {
+    const tx = bd.transaction(BD_COLA, 'readwrite');
+    tx.objectStore(BD_COLA).delete(id);
+    tx.oncomplete = function () { ok(true); };
+    tx.onerror = function () { ok(false); };
+  });
+}
+
+async function colaEnviar() {
+  if (!navigator.onLine) return;
+
+  const pendientes = await colaTodos();
+  for (const p of pendientes) {
+    try {
+      const r = await api(p.accion, p.datos);
+      if (r && r.ok) await colaBorrar(p.id);
+    } catch (e) {
+      break;     // sigue sin haber red: se reintenta en el próximo aviso
+    }
+  }
+  pintarEstado();
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 11 · BARRA DE ESTADO
+// ══════════════════════════════════════════════════════════════════════════
+
+async function pintarEstado() {
+  const barra = document.getElementById('barra-estado');
+  if (!barra) return;
+
+  barra.className = '';
+  barra.textContent = '';
+
+  if (!navigator.onLine) {
+    barra.className = 'sin-red';
+    barra.textContent = t('sin_red');
+    return;
+  }
+
+  let n = 0;
+  try { n = (await colaTodos()).length; } catch (e) { n = 0; }
+
+  if (n > 0) {
+    barra.className = 'pendientes';
+    barra.textContent = (n === 1)
+      ? t('pendientes_uno')
+      : t('pendientes_varios').replace('{n}', n);
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 12 · ARRANQUE
+// ══════════════════════════════════════════════════════════════════════════
+
+window.addEventListener('online', function () { pintarEstado(); colaEnviar(); });
+window.addEventListener('offline', pintarEstado);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function (e) {
+      console.warn('Service Worker no registrado:', e);
+    });
+  });
+}
+
+(function arrancar() {
+  pintarTextos();
+
+  if (!IDIOMA) {
+    ir('p-idioma');            // primera vez en este teléfono
+  } else {
+    arrancarSesion();
+  }
+
+  pintarEstado();
+  colaEnviar();
+})();
+</script>
+</body>
+</html>
