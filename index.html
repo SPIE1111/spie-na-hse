@@ -173,6 +173,91 @@
   .aviso b { color: #111827; display: block; margin-bottom: 6px; font-size: 17px; }
 
   .pie { margin-top: 26px; text-align: center; color: var(--gris); font-size: 13px; }
+
+  /* ── Formulario por pasos ─────────────────────────────────────────────── */
+  .pasos { display: flex; gap: 6px; margin: 0 0 18px; }
+  .pasos span { flex: 1; height: 5px; border-radius: 3px; background: var(--linea); }
+  .pasos span.hecho { background: var(--azul); }
+
+  .paso-de { color: var(--gris); font-size: 13px; font-weight: 700; text-transform: uppercase;
+             letter-spacing: .05em; margin-bottom: 4px; }
+
+  textarea, select, input[type=date], input[type=time], input[type=number] {
+    width: 100%;
+    padding: 14px;
+    font-size: 17px;
+    font-family: inherit;
+    border: 2px solid var(--linea);
+    border-radius: var(--radio);
+    background: var(--blanco);
+    color: inherit;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  textarea:focus, select:focus, input:focus { outline: none; border-color: var(--azul); }
+  .obligatorio { color: var(--rojo); }
+  .ayuda { color: var(--gris); font-size: 13px; margin-top: 6px; }
+
+  /* Opción única: lista de botones grandes, más fáciles de dar con guante */
+  .opciones { display: flex; flex-direction: column; gap: 9px; }
+  .opcion {
+    display: flex; align-items: flex-start; gap: 11px;
+    padding: 13px 15px;
+    background: var(--blanco);
+    border: 2px solid var(--linea);
+    border-radius: var(--radio);
+    cursor: pointer;
+    font-size: 15.5px;
+    text-align: left;
+    font-family: inherit;
+    color: inherit;
+    line-height: 1.35;
+  }
+  .opcion .marca {
+    width: 21px; height: 21px; border-radius: 50%;
+    border: 2px solid var(--gris); flex: none; margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .opcion.multiple .marca { border-radius: 6px; }
+  .opcion.elegida { border-color: var(--azul); background: #eef2ff; }
+  .opcion.elegida .marca { border-color: var(--azul); background: var(--azul); }
+  .opcion.elegida .marca::after { content: '✓'; color: #fff; font-size: 13px; font-weight: 700; }
+
+  /* Fotos */
+  .fotos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+  .foto {
+    position: relative; border-radius: var(--radio); overflow: hidden;
+    border: 2px solid var(--linea); background: var(--blanco); aspect-ratio: 4/3;
+  }
+  .foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .foto button {
+    position: absolute; top: 6px; right: 6px;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: none; background: rgba(0,0,0,.65); color: #fff;
+    font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .botones-foto { display: flex; gap: 10px; margin-top: 12px; }
+  .botones-foto .btn { margin: 0; flex: 1; font-size: 15px; padding: 14px 10px; }
+  input[type=file] { display: none; }
+
+  /* Resumen y confirmación */
+  .resumen { background: var(--blanco); border: 2px solid var(--linea); border-radius: var(--radio); padding: 4px 16px; }
+  .resumen .fila { padding: 11px 0; border-bottom: 1px solid var(--linea); }
+  .resumen .fila:last-child { border-bottom: none; }
+  .resumen .etq { color: var(--gris); font-size: 13px; font-weight: 700; }
+  .resumen .val { font-size: 15.5px; word-break: break-word; }
+
+  .exito { text-align: center; padding: 26px 20px; }
+  .exito .marca-ok {
+    width: 74px; height: 74px; border-radius: 50%;
+    background: #dcfce7; color: var(--verde);
+    font-size: 40px; line-height: 74px; margin: 0 auto 16px;
+  }
+  .folio {
+    font-size: 24px; font-weight: 800; color: var(--azul);
+    letter-spacing: .02em; margin: 10px 0 4px;
+  }
+  .fila-botones { display: flex; gap: 10px; margin-top: 22px; }
+  .fila-botones .btn { margin: 0; flex: 1; }
 </style>
 </head>
 
@@ -245,7 +330,95 @@
     <button class="btn texto" onclick="salir()" data-t="salir"></button>
   </section>
 
-  <!-- ══ 4 · Formularios · BLOQUES 9 y 10 ═══════════════════════════════ -->
+  <!-- ══ 4 · Formulario de HSE Observation / Incident ═══════════════════ -->
+  <section class="pantalla" id="p-hse">
+    <div class="pasos" id="hse-pasos"><span></span><span></span><span></span></div>
+    <div class="paso-de" id="hse-paso-de"></div>
+    <h1 id="hse-titulo"></h1>
+
+    <!-- ── Paso 1 · Detalles del incidente (preguntas 1 a 7) ── -->
+    <div class="hse-paso" id="hse-p1">
+      <label for="h-nombre">1 · <span data-t="h_q1"></span> <span class="obligatorio">*</span></label>
+      <input type="text" id="h-nombre" autocomplete="name">
+
+      <label for="h-fecha">2 · <span data-t="h_q2"></span> <span class="obligatorio">*</span></label>
+      <input type="date" id="h-fecha">
+
+      <label for="h-hora">3 · <span data-t="h_q3"></span> <span class="obligatorio">*</span></label>
+      <input type="time" id="h-hora">
+
+      <label>4 · <span data-t="h_q4"></span> <span class="obligatorio">*</span></label>
+      <div class="opciones" id="h-departamento"></div>
+
+      <label for="h-cliente">5 · <span data-t="h_q5"></span> <span class="obligatorio">*</span></label>
+      <input type="text" id="h-cliente">
+
+      <label>6 · <span data-t="h_q6"></span> <span class="obligatorio">*</span></label>
+      <div class="opciones" id="h-pais"></div>
+
+      <label for="h-sitio">7 · <span data-t="h_q7"></span> <span class="obligatorio">*</span></label>
+      <div id="h-sitio-caja"></div>
+    </div>
+
+    <!-- ── Paso 2 · Qué ocurrió (preguntas 8 y 9) ── -->
+    <div class="hse-paso" id="hse-p2" style="display:none">
+      <label>8 · <span data-t="h_q8"></span> <span class="obligatorio">*</span></label>
+      <div class="opciones" id="h-clasificacion"></div>
+      <div id="h-clasif-otro-caja" style="display:none">
+        <label for="h-clasif-otro" data-t="h_cual"></label>
+        <input type="text" id="h-clasif-otro">
+      </div>
+
+      <label for="h-descripcion">9 · <span data-t="h_q9"></span> <span class="obligatorio">*</span></label>
+      <textarea id="h-descripcion"></textarea>
+      <div class="ayuda" data-t="h_q9_ayuda"></div>
+    </div>
+
+    <!-- ── Paso 3 · Medidas, categoría de peligro y evidencia (10, 11, 12) ── -->
+    <div class="hse-paso" id="hse-p3" style="display:none">
+      <label>10 · <span data-t="h_q10"></span></label>
+      <div class="ayuda" style="margin:0 0 9px" data-t="h_q10_ayuda"></div>
+      <div class="opciones" id="h-acciones"></div>
+      <div id="h-accion-otro-caja" style="display:none">
+        <label for="h-accion-otro" data-t="h_cual"></label>
+        <input type="text" id="h-accion-otro">
+      </div>
+
+      <label>11 · <span data-t="h_q11"></span> <span class="obligatorio">*</span></label>
+      <div class="opciones" id="h-peligro"></div>
+
+      <label>12 · <span data-t="h_q12"></span></label>
+      <div class="ayuda" style="margin:0" data-t="h_q12_ayuda"></div>
+      <div class="fotos" id="h-fotos"></div>
+      <div class="botones-foto">
+        <button class="btn" onclick="document.getElementById('h-camara').click()" data-t="tomar_foto"></button>
+        <button class="btn secundario" onclick="document.getElementById('h-galeria').click()" data-t="elegir_foto"></button>
+      </div>
+      <input type="file" id="h-camara" accept="image/*" capture="environment" onchange="alElegirFoto(this)">
+      <input type="file" id="h-galeria" accept="image/*" multiple onchange="alElegirFoto(this)">
+    </div>
+
+    <div class="error" id="h-error"></div>
+
+    <div class="fila-botones">
+      <button class="btn secundario" id="h-atras" onclick="hsePasoAtras()" data-t="atras"></button>
+      <button class="btn" id="h-siguiente" onclick="hsePasoSiguiente()" data-t="siguiente"></button>
+    </div>
+    <button class="btn texto" onclick="cancelarHse()" data-t="cancelar"></button>
+  </section>
+
+  <!-- ══ 5 · Reporte enviado ════════════════════════════════════════════ -->
+  <section class="pantalla" id="p-listo">
+    <div class="exito">
+      <div class="marca-ok">✓</div>
+      <h1 id="listo-titulo" style="margin:0"></h1>
+      <div class="folio" id="listo-folio"></div>
+      <p class="sub" id="listo-detalle" style="margin-top:10px"></p>
+    </div>
+    <button class="btn" onclick="ir('p-tipo')" data-t="listo_otro"></button>
+  </section>
+
+  <!-- ══ 6 · Formulario de vehículos · BLOQUE 10 ════════════════════════ -->
   <section class="pantalla" id="p-formulario">
     <h1 id="f-titulo"></h1>
     <div class="aviso">
@@ -321,6 +494,52 @@ const TEXTOS = {
 
     pendiente_titulo:  'Este formulario todavía no está',
     pendiente_texto:   'Llega en el siguiente bloque. Lo que ya funciona es el idioma, tu acceso y la elección del tipo de reporte.',
+
+    // ── Formulario de HSE ──────────────────────────────────────────────
+    h_titulo:      'Observación / Incidente de HSE',
+    h_paso:        'Paso {n} de {total}',
+    h_paso1:       'Detalles del incidente',
+    h_paso2:       'Qué ocurrió',
+    h_paso3:       'Medidas, peligro y evidencia',
+
+    h_q1:  'Nombre de la persona que informa',
+    h_q2:  'Fecha de la Observación / Incidente',
+    h_q3:  'Hora de la Observación / Incidente',
+    h_q4:  'Departamento',
+    h_q5:  'Cliente',
+    h_q6:  'País de operaciones donde ocurrió',
+    h_q7:  'Sitio / Ubicación',
+    h_q8:  'Clasificación Prevista del Informe',
+    h_q9:  'Descripción de la Observación / Incidente',
+    h_q9_ayuda:  'Incluye qué tarea se estaba completando y qué estaba sucediendo directamente antes del incidente.',
+    h_q10: '¿Qué medidas se tomaron de inmediato?',
+    h_q10_ayuda: 'Selecciona todas las que correspondan.',
+    h_q11: 'Categoría de peligro asociada',
+    h_q12: 'Imágenes y/o archivos',
+    h_q12_ayuda: 'Hasta 4 archivos, 10 MB cada uno.',
+    h_cual:      'Especifica cuál',
+    h_sitio_ph:  'Nombre del parque o ubicación',
+
+    atras:       'Atrás',
+    siguiente:   'Siguiente',
+    enviar:      'Enviar reporte',
+    enviando:    'Enviando…',
+    cancelar:    'Cancelar y volver',
+    tomar_foto:  '📷 Tomar foto',
+    elegir_foto: '🖼️ Elegir archivo',
+
+    err_falta:        'Falta contestar: {campo}',
+    err_fecha_futura: 'La fecha no puede ser posterior a hoy.',
+    err_max_fotos:    'Solo se pueden adjuntar 4 archivos.',
+    err_foto_grande:  'Esa imagen pesa más de 10 MB.',
+    err_sin_catalogos: 'No se pudieron cargar las preguntas. Conéctate una vez y vuelve a intentarlo.',
+    err_envio:        'No se pudo enviar. Revisa lo que dice abajo e inténtalo otra vez.',
+
+    listo_titulo:   'Reporte enviado',
+    listo_detalle:  'Tu reporte quedó registrado. Guarda este folio por si necesitas dar seguimiento.',
+    listo_cola:     'Guardado sin conexión',
+    listo_cola_det: 'Se enviará solo en cuanto tengas señal. Puedes cerrar la app sin problema.',
+    listo_otro:     'Hacer otro reporte',
   },
 
   en: {
@@ -356,6 +575,52 @@ const TEXTOS = {
 
     pendiente_titulo:  'This form is not here yet',
     pendiente_texto:   'It arrives in the next block. What already works: the language, your sign-in, and choosing the type of report.',
+
+    // ── HSE form ───────────────────────────────────────────────────────
+    h_titulo:      'HSE Observation / Incident',
+    h_paso:        'Step {n} of {total}',
+    h_paso1:       'Incident details',
+    h_paso2:       'What happened',
+    h_paso3:       'Actions, hazard and evidence',
+
+    h_q1:  'Name of Person Reporting',
+    h_q2:  'Date of Observation / Incident',
+    h_q3:  'Time of Observation / Incident',
+    h_q4:  'Department',
+    h_q5:  'Customer',
+    h_q6:  'Country of Operations where it occurred',
+    h_q7:  'Site / Location',
+    h_q8:  'Expected Classification of Report',
+    h_q9:  'Description of Observation / Incident',
+    h_q9_ayuda:  'Include what task was being completed and what was happening directly before the incident.',
+    h_q10: 'What actions were immediately taken?',
+    h_q10_ayuda: 'Choose all that apply.',
+    h_q11: 'Hazard category associated',
+    h_q12: 'Pictures and/or files',
+    h_q12_ayuda: 'Up to 4 files, 10 MB each.',
+    h_cual:      'Please specify',
+    h_sitio_ph:  'Site or wind farm name',
+
+    atras:       'Back',
+    siguiente:   'Next',
+    enviar:      'Submit report',
+    enviando:    'Submitting…',
+    cancelar:    'Cancel and go back',
+    tomar_foto:  '📷 Take photo',
+    elegir_foto: '🖼️ Choose file',
+
+    err_falta:        'Still missing: {campo}',
+    err_fecha_futura: 'The date cannot be later than today.',
+    err_max_fotos:    'You can attach up to 4 files.',
+    err_foto_grande:  'That image is larger than 10 MB.',
+    err_sin_catalogos: 'The questions could not be loaded. Connect once and try again.',
+    err_envio:        'Could not submit. Check the message below and try again.',
+
+    listo_titulo:   'Report submitted',
+    listo_detalle:  'Your report was recorded. Keep this reference number in case you need to follow up.',
+    listo_cola:     'Saved offline',
+    listo_cola_det: 'It will be sent by itself as soon as you have signal. You can close the app safely.',
+    listo_otro:     'Make another report',
   },
 };
 
@@ -568,16 +833,440 @@ function arrancarSesion() {
 // 8 · TIPO DE REPORTE
 // ══════════════════════════════════════════════════════════════════════════
 
-function elegirTipo(tipo) {
+async function elegirTipo(tipo) {
   TIPO = tipo;
-  document.getElementById('f-titulo').textContent =
-    (tipo === 'hse') ? t('tipo_hse') : t('tipo_vehiculo');
-  ir('p-formulario');
 
-  // ═══ AQUÍ ENTRAN LOS FORMULARIOS ═══
-  // Bloque 9  · formulario de HSE Observation (12 preguntas)
-  // Bloque 10 · formulario de Vehicle Inspection (47 preguntas)
-  // Los dos se pintan a partir de CATALOGOS, que ya viene traducido.
+  if (tipo === 'hse') {
+    if (!CATALOGOS) await precargarCatalogos();
+    if (!CATALOGOS) { alert(t('err_sin_catalogos')); return; }
+    abrirHse();
+    return;
+  }
+
+  // ═══ BLOQUE 10 · aquí entra el formulario de Vehicle Inspection ═══
+  document.getElementById('f-titulo').textContent = t('tipo_vehiculo');
+  ir('p-formulario');
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 8b · FORMULARIO DE HSE OBSERVATION · las 12 preguntas del PDF
+// ══════════════════════════════════════════════════════════════════════════
+
+const HSE_PASOS = 3;
+let HSE_PASO = 1;
+let HSE = null;          // las respuestas
+let HSE_FOTOS = [];      // {nombre, mime, base64, vista}
+
+function hoyLocal() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+function ahoraLocal() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function abrirHse() {
+  HSE = {
+    departamento: SESION.department_code || '',
+    pais:         SESION.country_code || 'US',
+    clasificacion: '',
+    acciones:     [],
+    peligro:      '',
+    site_id:      null,
+  };
+  HSE_FOTOS = [];
+  HSE_PASO = 1;
+
+  // Lo que ya sabemos de la persona viene puesto, pero se puede corregir.
+  document.getElementById('h-nombre').value      = SESION.full_name || '';
+  document.getElementById('h-cliente').value     = '';
+  document.getElementById('h-descripcion').value = '';
+  document.getElementById('h-clasif-otro').value = '';
+  document.getElementById('h-accion-otro').value = '';
+
+  const fecha = document.getElementById('h-fecha');
+  fecha.value = hoyLocal();
+  fecha.max   = hoyLocal();
+  document.getElementById('h-hora').value = ahoraLocal();
+
+  pintarOpcionesHse();
+  pintarFotos();
+  hsePintarPaso();
+  ir('p-hse');
+}
+
+// Dibuja una lista de opciones (única o múltiple) a partir del catálogo.
+function listaOpciones(contenedor, items, multiple, elegidoAhora, alElegir) {
+  contenedor.innerHTML = '';
+  items.forEach(function (op) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'opcion' + (multiple ? ' multiple' : '');
+    b.dataset.code = op.code;
+    b.innerHTML = '<span class="marca"></span><span></span>';
+    b.querySelector('span:last-child').textContent = op.label;
+    if (elegidoAhora(op.code)) b.classList.add('elegida');
+    b.onclick = function () { alElegir(op.code); };
+    contenedor.appendChild(b);
+  });
+}
+
+function pintarOpcionesHse() {
+  const c = CATALOGOS;
+
+  // 4 · Departamento
+  listaOpciones(
+    document.getElementById('h-departamento'),
+    c.hse.departamentos, false,
+    (code) => HSE.departamento === code,
+    (code) => { HSE.departamento = code; pintarOpcionesHse(); limpiarErrorHse(); }
+  );
+
+  // 6 · País
+  listaOpciones(
+    document.getElementById('h-pais'),
+    c.paises.map((p) => ({ code: p.code, label: (IDIOMA === 'es' ? p.name_es : p.name_en) })),
+    false,
+    (code) => HSE.pais === code,
+    (code) => { HSE.pais = code; HSE.site_id = null; pintarOpcionesHse(); limpiarErrorHse(); }
+  );
+
+  // 7 · Sitio: desplegable si ya cargaste la lista de parques; si no, texto libre.
+  const caja = document.getElementById('h-sitio-caja');
+  const sitiosPais = (c.sitios || []).filter((s) => s.country_code === HSE.pais);
+  const valorPrevio = (document.getElementById('h-sitio') || {}).value || '';
+
+  if (sitiosPais.length > 0) {
+    let html = '<select id="h-sitio" onchange="limpiarErrorHse()"><option value=""></option>';
+    sitiosPais.forEach(function (s) {
+      html += '<option value="' + s.id + '">' + escaparHtml(s.name) + '</option>';
+    });
+    html += '</select>';
+    caja.innerHTML = html;
+    if (HSE.site_id) document.getElementById('h-sitio').value = HSE.site_id;
+  } else {
+    caja.innerHTML = '<input type="text" id="h-sitio" oninput="limpiarErrorHse()">';
+    const inp = document.getElementById('h-sitio');
+    inp.placeholder = t('h_sitio_ph');
+    inp.value = valorPrevio;
+  }
+
+  // 8 · Clasificación
+  listaOpciones(
+    document.getElementById('h-clasificacion'),
+    c.hse.clasificaciones, false,
+    (code) => HSE.clasificacion === code,
+    (code) => {
+      HSE.clasificacion = code;
+      pintarOpcionesHse();
+      const otra = c.hse.clasificaciones.find((x) => x.code === code);
+      document.getElementById('h-clasif-otro-caja').style.display = (otra && otra.is_other) ? '' : 'none';
+      limpiarErrorHse();
+    }
+  );
+
+  // 10 · Acciones (varias)
+  listaOpciones(
+    document.getElementById('h-acciones'),
+    c.hse.acciones, true,
+    (code) => HSE.acciones.indexOf(code) !== -1,
+    (code) => {
+      const i = HSE.acciones.indexOf(code);
+      if (i === -1) HSE.acciones.push(code); else HSE.acciones.splice(i, 1);
+      pintarOpcionesHse();
+      const hayOtra = c.hse.acciones.some((x) => x.is_other && HSE.acciones.indexOf(x.code) !== -1);
+      document.getElementById('h-accion-otro-caja').style.display = hayOtra ? '' : 'none';
+      limpiarErrorHse();
+    }
+  );
+
+  // 11 · Categoría de peligro
+  listaOpciones(
+    document.getElementById('h-peligro'),
+    c.hse.categorias, false,
+    (code) => HSE.peligro === code,
+    (code) => { HSE.peligro = code; pintarOpcionesHse(); limpiarErrorHse(); }
+  );
+}
+
+function escaparHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+
+// ── Pasos ─────────────────────────────────────────────────────────────────
+
+function hsePintarPaso() {
+  for (let i = 1; i <= HSE_PASOS; i++) {
+    document.getElementById('hse-p' + i).style.display = (i === HSE_PASO) ? '' : 'none';
+  }
+
+  const barras = document.querySelectorAll('#hse-pasos span');
+  barras.forEach(function (b, i) { b.classList.toggle('hecho', i < HSE_PASO); });
+
+  document.getElementById('hse-paso-de').textContent =
+    t('h_paso').replace('{n}', HSE_PASO).replace('{total}', HSE_PASOS);
+  document.getElementById('hse-titulo').textContent = t('h_paso' + HSE_PASO);
+
+  document.getElementById('h-atras').style.display = (HSE_PASO === 1) ? 'none' : '';
+  document.getElementById('h-siguiente').textContent =
+    (HSE_PASO === HSE_PASOS) ? t('enviar') : t('siguiente');
+
+  window.scrollTo(0, 0);
+}
+
+function limpiarErrorHse() {
+  document.getElementById('h-error').classList.remove('visible');
+}
+
+function errorHse(texto) {
+  const caja = document.getElementById('h-error');
+  caja.textContent = texto;
+  caja.classList.add('visible');
+  caja.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function falta(nombreClave) {
+  errorHse(t('err_falta').replace('{campo}', t(nombreClave)));
+  return false;
+}
+
+function hsePasoValido() {
+  const v = (id) => (document.getElementById(id).value || '').trim();
+
+  if (HSE_PASO === 1) {
+    if (!v('h-nombre'))      return falta('h_q1');
+    if (!v('h-fecha'))       return falta('h_q2');
+    if (v('h-fecha') > hoyLocal()) { errorHse(t('err_fecha_futura')); return false; }
+    if (!v('h-hora'))        return falta('h_q3');
+    if (!HSE.departamento)   return falta('h_q4');
+    if (!v('h-cliente'))     return falta('h_q5');
+    if (!HSE.pais)           return falta('h_q6');
+    if (!v('h-sitio'))       return falta('h_q7');
+    return true;
+  }
+
+  if (HSE_PASO === 2) {
+    if (!HSE.clasificacion)  return falta('h_q8');
+    const esOtra = CATALOGOS.hse.clasificaciones.some(
+      (x) => x.code === HSE.clasificacion && x.is_other);
+    if (esOtra && !v('h-clasif-otro')) return falta('h_cual');
+    if (!v('h-descripcion')) return falta('h_q9');
+    return true;
+  }
+
+  if (HSE_PASO === 3) {
+    if (!HSE.peligro)        return falta('h_q11');
+    const hayOtra = CATALOGOS.hse.acciones.some(
+      (x) => x.is_other && HSE.acciones.indexOf(x.code) !== -1);
+    if (hayOtra && !v('h-accion-otro')) return falta('h_cual');
+    return true;
+  }
+
+  return true;
+}
+
+function hsePasoSiguiente() {
+  limpiarErrorHse();
+  if (!hsePasoValido()) return;
+
+  if (HSE_PASO < HSE_PASOS) {
+    HSE_PASO++;
+    hsePintarPaso();
+  } else {
+    enviarHse();
+  }
+}
+
+function hsePasoAtras() {
+  limpiarErrorHse();
+  if (HSE_PASO > 1) { HSE_PASO--; hsePintarPaso(); }
+}
+
+function cancelarHse() {
+  HSE = null;
+  HSE_FOTOS = [];
+  ir('p-tipo');
+}
+
+
+// ── Fotos ─────────────────────────────────────────────────────────────────
+
+// Se reduce la imagen antes de guardarla: una foto de teléfono pesa varios
+// megas y por red de parque eólico no sube nunca.
+function comprimirFoto(archivo, ladoMax, calidad) {
+  return new Promise(function (ok, mal) {
+    const lector = new FileReader();
+    lector.onerror = function () { mal(new Error('lectura')); };
+    lector.onload = function () {
+      const img = new Image();
+      img.onerror = function () { mal(new Error('imagen')); };
+      img.onload = function () {
+        let { width: w, height: h } = img;
+        if (w > ladoMax || h > ladoMax) {
+          if (w >= h) { h = Math.round(h * ladoMax / w); w = ladoMax; }
+          else        { w = Math.round(w * ladoMax / h); h = ladoMax; }
+        }
+        const lienzo = document.createElement('canvas');
+        lienzo.width = w; lienzo.height = h;
+        lienzo.getContext('2d').drawImage(img, 0, 0, w, h);
+        const url = lienzo.toDataURL('image/jpeg', calidad);
+        ok({
+          nombre: (archivo.name || 'foto.jpg').replace(/\.[^.]+$/, '') + '.jpg',
+          mime: 'image/jpeg',
+          base64: url.split(',')[1],
+          vista: url,
+        });
+      };
+      img.src = lector.result;
+    };
+    lector.readAsDataURL(archivo);
+  });
+}
+
+async function alElegirFoto(entrada) {
+  const archivos = Array.from(entrada.files || []);
+  entrada.value = '';           // para poder volver a elegir la misma
+  limpiarErrorHse();
+
+  for (const a of archivos) {
+    if (HSE_FOTOS.length >= 4) { errorHse(t('err_max_fotos')); break; }
+    if (a.size > 10 * 1024 * 1024) { errorHse(t('err_foto_grande')); continue; }
+    try {
+      HSE_FOTOS.push(await comprimirFoto(a, 1600, 0.7));
+    } catch (e) { /* si una imagen falla, se sigue con las demás */ }
+  }
+  pintarFotos();
+}
+
+function quitarFoto(i) {
+  HSE_FOTOS.splice(i, 1);
+  pintarFotos();
+  limpiarErrorHse();
+}
+
+function pintarFotos() {
+  const caja = document.getElementById('h-fotos');
+  caja.innerHTML = '';
+  HSE_FOTOS.forEach(function (f, i) {
+    const d = document.createElement('div');
+    d.className = 'foto';
+    const img = document.createElement('img');
+    img.src = f.vista;
+    img.alt = f.nombre;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = '×';
+    b.onclick = function () { quitarFoto(i); };
+    d.appendChild(img);
+    d.appendChild(b);
+    caja.appendChild(d);
+  });
+}
+
+
+// ── Envío ─────────────────────────────────────────────────────────────────
+
+function armarReporteHse() {
+  const v = (id) => (document.getElementById(id).value || '').trim();
+  const sitioEs = document.getElementById('h-sitio');
+  const esSelect = sitioEs && sitioEs.tagName === 'SELECT';
+
+  return {
+    employee_no:          SESION.employee_no,
+    reporter_name:        v('h-nombre'),
+    occurred_date:        v('h-fecha'),
+    occurred_time:        v('h-hora'),
+    department_code:      HSE.departamento,
+    customer:             v('h-cliente'),
+    country_code:         HSE.pais,
+    site_id:              esSelect ? (v('h-sitio') || null) : null,
+    site_other:           esSelect ? null : v('h-sitio'),
+    classification_code:  HSE.clasificacion,
+    classification_other: v('h-clasif-otro') || null,
+    description:          v('h-descripcion'),
+    action_codes:         HSE.acciones.slice(),
+    action_other:         v('h-accion-otro') || null,
+    hazard_category_code: HSE.peligro,
+    tz:                   ZONA,
+    lang:                 IDIOMA,
+  };
+}
+
+// Manda el reporte y después sus fotos. Se usa igual desde el botón de enviar
+// y desde la cola cuando vuelve la señal, para que no haya dos caminos que
+// puedan comportarse distinto.
+async function mandarHse(reporte, fotos) {
+  const r = await api('hse-crear', { reporte: reporte });
+  if (!r.ok) throw new Error(r.error || 'error');
+
+  const folio = r.reporte.report_code;
+
+  for (const f of (fotos || [])) {
+    try {
+      await api('adjuntar', {
+        report_code: folio,
+        file_name: f.nombre,
+        mime_type: f.mime,
+        base64: f.base64,
+      });
+    } catch (e) {
+      // El reporte ya quedó guardado; una foto que falle no lo tira abajo.
+      console.warn('No se pudo subir una foto:', e);
+    }
+  }
+  return folio;
+}
+
+async function enviarHse() {
+  const boton = document.getElementById('h-siguiente');
+  const reporte = armarReporteHse();
+  const fotos = HSE_FOTOS.map((f) => ({ nombre: f.nombre, mime: f.mime, base64: f.base64 }));
+
+  // Sin señal: a la cola, y se avisa con claridad de que no se ha ido todavía.
+  if (!navigator.onLine) {
+    await colaGuardar({
+      id: 'hse-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      tipo: 'hse',
+      reporte: reporte,
+      fotos: fotos,
+    });
+    mostrarListo(null);
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = t('enviando');
+
+  try {
+    const folio = await mandarHse(reporte, fotos);
+    mostrarListo(folio);
+  } catch (e) {
+    errorHse(t('err_envio') + ' ' + (e.message || ''));
+  } finally {
+    boton.disabled = false;
+    boton.textContent = t('enviar');
+  }
+}
+
+function mostrarListo(folio) {
+  document.getElementById('listo-titulo').textContent =
+    folio ? t('listo_titulo') : t('listo_cola');
+  document.getElementById('listo-folio').textContent = folio || '';
+  document.getElementById('listo-detalle').textContent =
+    folio ? t('listo_detalle') : t('listo_cola_det');
+
+  HSE = null;
+  HSE_FOTOS = [];
+  pintarEstado();
+  ir('p-listo');
 }
 
 
@@ -663,18 +1352,40 @@ async function colaBorrar(id) {
   });
 }
 
-async function colaEnviar() {
-  if (!navigator.onLine) return;
+let COLA_TRABAJANDO = false;
 
-  const pendientes = await colaTodos();
-  for (const p of pendientes) {
-    try {
-      const r = await api(p.accion, p.datos);
-      if (r && r.ok) await colaBorrar(p.id);
-    } catch (e) {
-      break;     // sigue sin haber red: se reintenta en el próximo aviso
+async function colaEnviar() {
+  if (!navigator.onLine || COLA_TRABAJANDO) return;
+  COLA_TRABAJANDO = true;
+
+  try {
+    const pendientes = await colaTodos();
+
+    for (const p of pendientes) {
+      try {
+        if (p.tipo === 'hse') {
+          await mandarHse(p.reporte, p.fotos);
+          await colaBorrar(p.id);
+        } else if (p.tipo === 'vehiculo') {
+          // Bloque 10
+          await colaBorrar(p.id);
+        }
+      } catch (e) {
+        // Si el servidor RECHAZA el reporte (datos inválidos), reintentarlo
+        // mil veces no lo va a arreglar: se descarta para no dejar la cola
+        // atascada para siempre. Si fue un fallo de red, se conserva.
+        if (navigator.onLine && /no válid|not valid|inexistente|vacía|rechaz/i.test(e.message || '')) {
+          await colaBorrar(p.id);
+          console.warn('Reporte descartado por datos inválidos:', p.id, e.message);
+        } else {
+          break;   // sigue sin haber red: se reintenta en el próximo aviso
+        }
+      }
     }
+  } finally {
+    COLA_TRABAJANDO = false;
   }
+
   pintarEstado();
 }
 
