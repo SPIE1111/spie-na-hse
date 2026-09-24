@@ -258,6 +258,66 @@
   }
   .fila-botones { display: flex; gap: 10px; margin-top: 22px; }
   .fila-botones .btn { margin: 0; flex: 1; }
+
+  /* ── Acordeón de categorías de peligro ────────────────────────────────── */
+  .acordeon {
+    border: 2px solid var(--linea);
+    border-radius: var(--radio);
+    overflow: hidden;
+    background: var(--blanco);
+    margin-top: 8px;
+  }
+  .acor-fila {
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; padding: 12px 14px;
+    background: var(--blanco); border: none;
+    border-bottom: 1px solid var(--linea);
+    font-family: inherit; font-size: 16px; color: inherit;
+    text-align: left; cursor: pointer;
+  }
+  .acor-fila:last-child { border-bottom: none; }
+  .acor-fila.abierta { background: #eef2ff; }
+  .acor-fila:active { background: #e6ebff; }
+
+  .letra {
+    width: 30px; height: 30px; flex: none;
+    border-radius: 8px;
+    background: var(--azul); color: var(--blanco);
+    font-weight: 800; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .acor-nombre { flex: 1; font-weight: 700; line-height: 1.25; }
+  .acor-cuenta { color: var(--gris); font-size: 14px; font-weight: 700; }
+  .acor-flecha { color: var(--gris); font-size: 12px; width: 13px; text-align: center; }
+  .acor-fila.con-eleccion .acor-cuenta { color: var(--verde); }
+
+  .acor-cuerpo {
+    display: none;
+    padding: 4px 14px 15px;
+    background: #eef2ff;
+    border-bottom: 1px solid var(--linea);
+  }
+  .acor-cuerpo.abierto { display: flex; flex-wrap: wrap; gap: 7px; }
+
+  .chip {
+    padding: 8px 13px;
+    border-radius: 999px;
+    border: 2px solid var(--azul);
+    background: var(--blanco);
+    color: var(--azul);
+    font-size: 13.5px; font-family: inherit;
+    line-height: 1.25; cursor: pointer;
+  }
+  .chip:active { background: #dbe3ff; }
+  .chip.elegido { background: var(--azul); color: var(--blanco); }
+
+  .elegido-caja {
+    margin-top: 12px; padding: 12px 14px;
+    background: #ecfdf5; border: 2px solid #a7f3d0;
+    border-radius: var(--radio); font-size: 15px;
+  }
+  .elegido-caja b { display: block; font-size: 12.5px; color: var(--verde);
+                    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
 </style>
 </head>
 
@@ -389,12 +449,10 @@
         <input type="text" id="h-accion-otro">
       </div>
 
-      <label for="h-peligro">11 · <span data-t="h_q11"></span> <span class="obligatorio">*</span></label>
-      <select id="h-peligro" onchange="alCambiarPeligro()"></select>
-
-      <label for="h-peligro-item">11b · <span data-t="h_q11b"></span> <span class="obligatorio">*</span></label>
-      <select id="h-peligro-item" onchange="alCambiarPeligroItem()"></select>
-      <div class="ayuda" id="h-peligro-ayuda" data-t="h_elige_categoria"></div>
+      <label>11 · <span data-t="h_q11"></span> <span class="obligatorio">*</span></label>
+      <div class="ayuda" style="margin:0 0 4px" data-t="h_q11_ayuda"></div>
+      <div class="acordeon" id="h-peligros"></div>
+      <div class="elegido-caja" id="h-peligro-elegido" style="display:none"></div>
 
       <label>12 · <span data-t="h_q12"></span></label>
       <div class="ayuda" style="margin:0" data-t="h_q12_ayuda"></div>
@@ -451,7 +509,7 @@ const CONFIG = {
   // Project Settings → API → anon public.
   // Esta llave es PÚBLICA a propósito: por sí sola no sirve para nada, porque
   // todo el control de acceso vive en la Edge Function y en la base de datos.
-  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkbGN2Y2ppaHZwd2lvbWdnc2dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5ODIxMTEsImV4cCI6MjEwNDU1ODExMX0.kk2W8L98cuUpqS0z3OVj3xJA5XkO4_1yYQr2VWaDXYY',
+  ANON_KEY: 'PEGA_AQUI_TU_ANON_KEY',
 };
 
 const API = CONFIG.SUPABASE_URL + '/functions/v1/empleado-api';
@@ -529,6 +587,8 @@ const TEXTOS = {
     h_cual:      'Especifica cuál',
     h_sitio_ph:  'Nombre del parque o ubicación',
     h_q11b:      'Peligro específico',
+    h_q11_ayuda: 'Toca una categoría y elige el peligro concreto.',
+    h_elegido:   'Peligro elegido',
     h_elegir:    '— Elige una opción —',
     h_elige_pais:      'Elige primero el país.',
     h_elige_sitio:     'Elige primero el sitio.',
@@ -615,6 +675,8 @@ const TEXTOS = {
     h_cual:      'Please specify',
     h_sitio_ph:  'Site or wind farm name',
     h_q11b:      'Specific hazard',
+    h_q11_ayuda: 'Tap a category and pick the specific hazard.',
+    h_elegido:   'Selected hazard',
     h_elegir:    '— Choose an option —',
     h_elige_pais:      'Choose the country first.',
     h_elige_sitio:     'Choose the site first.',
@@ -863,8 +925,8 @@ async function elegirTipo(tipo) {
   TIPO = tipo;
 
   if (tipo === 'hse') {
-    if (!CATALOGOS) await precargarCatalogos();
-    if (!CATALOGOS) { alert(t('err_sin_catalogos')); return; }
+    if (!catalogosCompletos(CATALOGOS)) await precargarCatalogos();
+    if (!catalogosCompletos(CATALOGOS)) { alert(t('err_sin_catalogos')); return; }
     abrirHse();
     return;
   }
@@ -906,6 +968,7 @@ function abrirHse() {
     acciones:     [],
     peligro:      '',
     peligro_item: '',
+    peligro_abierta: null,
   };
   HSE_FOTOS = [];
   HSE_PASO = 1;
@@ -968,9 +1031,8 @@ function pintarOpcionesHse() {
   // donde se marcan varias a la vez.
   pintarAcciones();
 
-  // 11 · Categoría de peligro, y 11b el peligro concreto dentro de ella
-  llenarSelect('h-peligro', c.hse.categorias, HSE.peligro, true);
-  pintarPeligrosItems();
+  // 11 · Categorías de peligro, en acordeón
+  pintarPeligros();
 }
 
 
@@ -1076,31 +1138,112 @@ function alCambiarClasificacion() {
   limpiarErrorHse();
 }
 
-// ── Categoría de peligro → peligro concreto ───────────────────────────────
+// ── Categorías de peligro · acordeón ──────────────────────────────────────
+//
+// Una lista de las 20 categorías. Al tocar una se despliegan sus peligros
+// concretos como etiquetas, y se elige tocando una. Así el peligro se escoge
+// en un solo gesto en lugar de dos desplegables encadenados, y se ve de un
+// vistazo cuántas opciones tiene cada categoría.
 
-function peligrosDeCategoria() {
-  if (!HSE.peligro) return [];
-  return (CATALOGOS.hse.peligros || []).filter((x) => x.parent_code === HSE.peligro);
+// La clave interna de "Superficies Térmicas" es NN para no meter una Ñ en un
+// dato técnico. En pantalla sí se muestra la letra que le corresponde.
+function letraDe(code) {
+  return (code === 'NN') ? 'Ñ' : code;
 }
 
-function pintarPeligrosItems() {
-  const lista = peligrosDeCategoria();
-  llenarSelect('h-peligro-item', lista, HSE.peligro_item, true);
-
-  const ayuda = document.getElementById('h-peligro-ayuda');
-  if (!HSE.peligro) {
-    ayuda.textContent = t('h_elige_categoria');
-    ayuda.style.display = '';
-  } else {
-    ayuda.style.display = 'none';
-  }
+function peligrosDeCategoria(code) {
+  const cat = (code === undefined) ? HSE.peligro : code;
+  if (!cat) return [];
+  return (CATALOGOS.hse.peligros || []).filter((x) => x.parent_code === cat);
 }
 
-function alCambiarPeligro() {
-  HSE.peligro = document.getElementById('h-peligro').value;
-  HSE.peligro_item = '';
-  pintarPeligrosItems();
+function pintarPeligros() {
+  const cont = document.getElementById('h-peligros');
+  if (!cont) return;
+  cont.innerHTML = '';
+
+  (CATALOGOS.hse.categorias || []).forEach(function (cat) {
+    const hijos = peligrosDeCategoria(cat.code);
+    const abierta = (HSE.peligro_abierta === cat.code);
+    const elegida = (HSE.peligro === cat.code && !!HSE.peligro_item);
+
+    const fila = document.createElement('button');
+    fila.type = 'button';
+    fila.className = 'acor-fila' + (abierta ? ' abierta' : '') + (elegida ? ' con-eleccion' : '');
+
+    const letra = document.createElement('span');
+    letra.className = 'letra';
+    letra.textContent = letraDe(cat.code);
+
+    const nombre = document.createElement('span');
+    nombre.className = 'acor-nombre';
+    nombre.textContent = cat.label;
+
+    const cuenta = document.createElement('span');
+    cuenta.className = 'acor-cuenta';
+    cuenta.textContent = elegida ? '✓' : String(hijos.length);
+
+    const flecha = document.createElement('span');
+    flecha.className = 'acor-flecha';
+    flecha.textContent = abierta ? '▲' : '▼';
+
+    fila.appendChild(letra);
+    fila.appendChild(nombre);
+    fila.appendChild(cuenta);
+    fila.appendChild(flecha);
+    fila.onclick = function () { abrirCategoria(cat.code); };
+    cont.appendChild(fila);
+
+    const cuerpo = document.createElement('div');
+    cuerpo.className = 'acor-cuerpo' + (abierta ? ' abierto' : '');
+    hijos.forEach(function (h) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip' + (HSE.peligro_item === h.code ? ' elegido' : '');
+      chip.textContent = h.label;
+      chip.onclick = function (e) { e.stopPropagation(); elegirPeligro(cat.code, h.code); };
+      cuerpo.appendChild(chip);
+    });
+    cont.appendChild(cuerpo);
+  });
+
+  pintarPeligroElegido();
+}
+
+// Solo una categoría abierta a la vez: con 20, tenerlas todas abiertas
+// convierte la pantalla en una lista interminable.
+function abrirCategoria(code) {
+  HSE.peligro_abierta = (HSE.peligro_abierta === code) ? null : code;
+  pintarPeligros();
   limpiarErrorHse();
+}
+
+function elegirPeligro(catCode, itemCode) {
+  HSE.peligro = catCode;
+  HSE.peligro_item = itemCode;
+  HSE.peligro_abierta = catCode;
+  pintarPeligros();
+  limpiarErrorHse();
+}
+
+function pintarPeligroElegido() {
+  const caja = document.getElementById('h-peligro-elegido');
+  if (!caja) return;
+
+  if (!HSE.peligro || !HSE.peligro_item) { caja.style.display = 'none'; return; }
+
+  const cat  = (CATALOGOS.hse.categorias || []).find((x) => x.code === HSE.peligro);
+  const item = (CATALOGOS.hse.peligros || []).find((x) => x.code === HSE.peligro_item);
+  if (!cat || !item) { caja.style.display = 'none'; return; }
+
+  caja.innerHTML = '';
+  const etq = document.createElement('b');
+  etq.textContent = t('h_elegido');
+  const txt = document.createElement('span');
+  txt.textContent = cat.label + ' → ' + item.label;
+  caja.appendChild(etq);
+  caja.appendChild(txt);
+  caja.style.display = '';
 }
 // Solo la lista de acciones. Repintar el formulario entero al marcar una
 // acción borraba los desplegables ya contestados.
@@ -1123,11 +1266,6 @@ function pintarAcciones() {
 
 function alCambiarCliente() {
   HSE.cliente = document.getElementById('h-cliente').value;
-  limpiarErrorHse();
-}
-
-function alCambiarPeligroItem() {
-  HSE.peligro_item = document.getElementById('h-peligro-item').value;
   limpiarErrorHse();
 }
 
@@ -1200,8 +1338,7 @@ function hsePasoValido() {
   }
 
   if (HSE_PASO === 3) {
-    if (!HSE.peligro)        return falta('h_q11');
-    if (peligrosDeCategoria().length > 0 && !HSE.peligro_item) return falta('h_q11b');
+    if (!HSE.peligro || !HSE.peligro_item) return falta('h_q11');
     const hayOtra = CATALOGOS.hse.acciones.some(
       (x) => x.is_other && HSE.acciones.indexOf(x.code) !== -1);
     if (hayOtra && !v('h-accion-otro')) return falta('h_cual');
@@ -1419,22 +1556,47 @@ function mostrarListo(folio) {
 // 9 · CATÁLOGOS · se guardan para poder llenar el formulario sin señal
 // ══════════════════════════════════════════════════════════════════════════
 
+// Los catálogos guardados en el teléfono son de una versión concreta de la
+// app. Cuando cambia lo que la app necesita —como al añadir los peligros
+// concretos— lo viejo se queda corto, y usarlo deja controles vacíos que el
+// usuario no puede rellenar. Por eso NUNCA se da por bueno lo guardado sin
+// comprobar antes que trae todo lo que hace falta.
+function catalogosCompletos(c) {
+  return !!(c && c.ok
+    && Array.isArray(c.paises)  && c.paises.length > 0
+    && Array.isArray(c.vehiculo)
+    && c.hse
+    && Array.isArray(c.hse.departamentos)   && c.hse.departamentos.length > 0
+    && Array.isArray(c.hse.clasificaciones) && c.hse.clasificaciones.length > 0
+    && Array.isArray(c.hse.acciones)        && c.hse.acciones.length > 0
+    && Array.isArray(c.hse.categorias)      && c.hse.categorias.length > 0
+    && Array.isArray(c.hse.peligros)        && c.hse.peligros.length > 0);
+}
+
 async function precargarCatalogos() {
-  // Primero lo que haya guardado, para que la app sirva aunque no haya red.
+  // Lo guardado sirve de arranque, pero solo si está completo.
   const guardado = localStorage.getItem('spie_catalogos_' + IDIOMA);
   if (guardado) {
-    try { CATALOGOS = JSON.parse(guardado); } catch (e) { CATALOGOS = null; }
+    try {
+      const c = JSON.parse(guardado);
+      CATALOGOS = catalogosCompletos(c) ? c : null;
+      if (!CATALOGOS) localStorage.removeItem('spie_catalogos_' + IDIOMA);
+    } catch (e) {
+      CATALOGOS = null;
+      localStorage.removeItem('spie_catalogos_' + IDIOMA);
+    }
   }
 
   if (!navigator.onLine) return;
 
+  // Con señal se piden SIEMPRE los frescos, aunque ya hubiera guardados.
   try {
     const r = await api('catalogos');
-    if (r && r.ok) {
+    if (catalogosCompletos(r)) {
       CATALOGOS = r;
       localStorage.setItem('spie_catalogos_' + IDIOMA, JSON.stringify(r));
     }
-  } catch (e) { /* se sigue usando lo guardado */ }
+  } catch (e) { /* sin red se sigue con lo guardado, si estaba completo */ }
 }
 
 
