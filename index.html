@@ -509,7 +509,7 @@ const CONFIG = {
   // Project Settings → API → anon public.
   // Esta llave es PÚBLICA a propósito: por sí sola no sirve para nada, porque
   // todo el control de acceso vive en la Edge Function y en la base de datos.
-  ANON_KEY: 'PEGA_AQUI_TU_ANON_KEY',
+  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkbGN2Y2ppaHZwd2lvbWdnc2dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5ODIxMTEsImV4cCI6MjEwNDU1ODExMX0.kk2W8L98cuUpqS0z3OVj3xJA5XkO4_1yYQr2VWaDXYY',
 };
 
 const API = CONFIG.SUPABASE_URL + '/functions/v1/empleado-api';
@@ -518,7 +518,7 @@ const API = CONFIG.SUPABASE_URL + '/functions/v1/empleado-api';
 // ══════════════════════════════════════════════════════════════════════════
 // 2 · TEXTOS DE LA APP
 //
-// Las preguntas de los formularios vienen de la base de datos, traducidas.
+// Las preguntas de los formularios vi|enen de la base de datos, traducidas.
 // Pero estos textos —botones, avisos, errores— tienen que estar AQUÍ dentro,
 // porque la app debe poder saludarte y decirte "no hay señal" justamente
 // cuando no hay señal para ir a buscarlos.
