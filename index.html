@@ -347,23 +347,28 @@
       <label for="h-hora">3 · <span data-t="h_q3"></span> <span class="obligatorio">*</span></label>
       <input type="time" id="h-hora">
 
-      <label>4 · <span data-t="h_q4"></span> <span class="obligatorio">*</span></label>
-      <div class="opciones" id="h-departamento"></div>
+      <label for="h-departamento">4 · <span data-t="h_q4"></span> <span class="obligatorio">*</span></label>
+      <select id="h-departamento" onchange="alCambiarDepartamento()"></select>
 
-      <label for="h-cliente">5 · <span data-t="h_q5"></span> <span class="obligatorio">*</span></label>
-      <input type="text" id="h-cliente">
-
-      <label>6 · <span data-t="h_q6"></span> <span class="obligatorio">*</span></label>
-      <div class="opciones" id="h-pais"></div>
+      <!-- País → Sitio → Cliente. Cada uno se habilita cuando el anterior
+           está contestado, para que no se puedan combinar datos imposibles. -->
+      <label for="h-pais">6 · <span data-t="h_q6"></span> <span class="obligatorio">*</span></label>
+      <select id="h-pais" onchange="alCambiarPais()"></select>
 
       <label for="h-sitio">7 · <span data-t="h_q7"></span> <span class="obligatorio">*</span></label>
-      <div id="h-sitio-caja"></div>
+      <select id="h-sitio" onchange="alCambiarSitio()"></select>
+      <div class="ayuda" id="h-sitio-ayuda" data-t="h_elige_pais"></div>
+
+      <label for="h-cliente">5 · <span data-t="h_q5"></span> <span class="obligatorio">*</span></label>
+      <select id="h-cliente" onchange="alCambiarCliente()"></select>
+      <input type="text" id="h-cliente-texto" style="display:none" oninput="limpiarErrorHse()">
+      <div class="ayuda" id="h-cliente-ayuda" data-t="h_elige_sitio"></div>
     </div>
 
     <!-- ── Paso 2 · Qué ocurrió (preguntas 8 y 9) ── -->
     <div class="hse-paso" id="hse-p2" style="display:none">
-      <label>8 · <span data-t="h_q8"></span> <span class="obligatorio">*</span></label>
-      <div class="opciones" id="h-clasificacion"></div>
+      <label for="h-clasificacion">8 · <span data-t="h_q8"></span> <span class="obligatorio">*</span></label>
+      <select id="h-clasificacion" onchange="alCambiarClasificacion()"></select>
       <div id="h-clasif-otro-caja" style="display:none">
         <label for="h-clasif-otro" data-t="h_cual"></label>
         <input type="text" id="h-clasif-otro">
@@ -384,8 +389,12 @@
         <input type="text" id="h-accion-otro">
       </div>
 
-      <label>11 · <span data-t="h_q11"></span> <span class="obligatorio">*</span></label>
-      <div class="opciones" id="h-peligro"></div>
+      <label for="h-peligro">11 · <span data-t="h_q11"></span> <span class="obligatorio">*</span></label>
+      <select id="h-peligro" onchange="alCambiarPeligro()"></select>
+
+      <label for="h-peligro-item">11b · <span data-t="h_q11b"></span> <span class="obligatorio">*</span></label>
+      <select id="h-peligro-item" onchange="alCambiarPeligroItem()"></select>
+      <div class="ayuda" id="h-peligro-ayuda" data-t="h_elige_categoria"></div>
 
       <label>12 · <span data-t="h_q12"></span></label>
       <div class="ayuda" style="margin:0" data-t="h_q12_ayuda"></div>
@@ -519,6 +528,11 @@ const TEXTOS = {
     h_q12_ayuda: 'Hasta 4 archivos, 10 MB cada uno.',
     h_cual:      'Especifica cuál',
     h_sitio_ph:  'Nombre del parque o ubicación',
+    h_q11b:      'Peligro específico',
+    h_elegir:    '— Elige una opción —',
+    h_elige_pais:      'Elige primero el país.',
+    h_elige_sitio:     'Elige primero el sitio.',
+    h_elige_categoria: 'Elige primero la categoría.',
 
     atras:       'Atrás',
     siguiente:   'Siguiente',
@@ -600,6 +614,11 @@ const TEXTOS = {
     h_q12_ayuda: 'Up to 4 files, 10 MB each.',
     h_cual:      'Please specify',
     h_sitio_ph:  'Site or wind farm name',
+    h_q11b:      'Specific hazard',
+    h_elegir:    '— Choose an option —',
+    h_elige_pais:      'Choose the country first.',
+    h_elige_sitio:     'Choose the site first.',
+    h_elige_categoria: 'Choose the category first.',
 
     atras:       'Back',
     siguiente:   'Next',
@@ -664,6 +683,13 @@ function pintarTextos() {
 
   const nombre = document.getElementById('a-nombre');
   if (nombre) nombre.placeholder = t('acceso_nombre_ph');
+
+  const cliTexto = document.getElementById('h-cliente-texto');
+  if (cliTexto) cliTexto.placeholder = t('h_q5');
+
+  // Si el formulario está abierto, sus desplegables se vuelven a pintar en el
+  // idioma nuevo sin perder lo que la persona ya había contestado.
+  if (HSE && CATALOGOS) pintarOpcionesHse();
 
   const btn = document.getElementById('btn-idioma');
   if (btn) {
@@ -874,18 +900,20 @@ function abrirHse() {
   HSE = {
     departamento: SESION.department_code || '',
     pais:         SESION.country_code || 'US',
+    site_id:      null,
+    cliente:      '',
     clasificacion: '',
     acciones:     [],
     peligro:      '',
-    site_id:      null,
+    peligro_item: '',
   };
   HSE_FOTOS = [];
   HSE_PASO = 1;
 
   // Lo que ya sabemos de la persona viene puesto, pero se puede corregir.
-  document.getElementById('h-nombre').value      = SESION.full_name || '';
-  document.getElementById('h-cliente').value     = '';
-  document.getElementById('h-descripcion').value = '';
+  document.getElementById('h-nombre').value        = SESION.full_name || '';
+  document.getElementById('h-cliente-texto').value = '';
+  document.getElementById('h-descripcion').value   = '';
   document.getElementById('h-clasif-otro').value = '';
   document.getElementById('h-accion-otro').value = '';
 
@@ -920,57 +948,164 @@ function pintarOpcionesHse() {
   const c = CATALOGOS;
 
   // 4 · Departamento
-  listaOpciones(
-    document.getElementById('h-departamento'),
-    c.hse.departamentos, false,
-    (code) => HSE.departamento === code,
-    (code) => { HSE.departamento = code; pintarOpcionesHse(); limpiarErrorHse(); }
-  );
+  llenarSelect('h-departamento', c.hse.departamentos, HSE.departamento, true);
 
   // 6 · País
-  listaOpciones(
-    document.getElementById('h-pais'),
+  llenarSelect('h-pais',
     c.paises.map((p) => ({ code: p.code, label: (IDIOMA === 'es' ? p.name_es : p.name_en) })),
-    false,
-    (code) => HSE.pais === code,
-    (code) => { HSE.pais = code; HSE.site_id = null; pintarOpcionesHse(); limpiarErrorHse(); }
-  );
+    HSE.pais, true);
 
-  // 7 · Sitio: desplegable si ya cargaste la lista de parques; si no, texto libre.
-  const caja = document.getElementById('h-sitio-caja');
-  const sitiosPais = (c.sitios || []).filter((s) => s.country_code === HSE.pais);
-  const valorPrevio = (document.getElementById('h-sitio') || {}).value || '';
+  // 7 · Sitio · depende del país
+  pintarSitios();
 
-  if (sitiosPais.length > 0) {
-    let html = '<select id="h-sitio" onchange="limpiarErrorHse()"><option value=""></option>';
-    sitiosPais.forEach(function (s) {
-      html += '<option value="' + s.id + '">' + escaparHtml(s.name) + '</option>';
-    });
-    html += '</select>';
-    caja.innerHTML = html;
-    if (HSE.site_id) document.getElementById('h-sitio').value = HSE.site_id;
-  } else {
-    caja.innerHTML = '<input type="text" id="h-sitio" oninput="limpiarErrorHse()">';
-    const inp = document.getElementById('h-sitio');
-    inp.placeholder = t('h_sitio_ph');
-    inp.value = valorPrevio;
-  }
+  // 5 · Cliente · depende del sitio
+  pintarClientes();
 
   // 8 · Clasificación
-  listaOpciones(
-    document.getElementById('h-clasificacion'),
-    c.hse.clasificaciones, false,
-    (code) => HSE.clasificacion === code,
-    (code) => {
-      HSE.clasificacion = code;
-      pintarOpcionesHse();
-      const otra = c.hse.clasificaciones.find((x) => x.code === code);
-      document.getElementById('h-clasif-otro-caja').style.display = (otra && otra.is_other) ? '' : 'none';
-      limpiarErrorHse();
-    }
-  );
+  llenarSelect('h-clasificacion', c.hse.clasificaciones, HSE.clasificacion, true);
 
-  // 10 · Acciones (varias)
+  // 10 · Acciones · la ÚNICA que sigue siendo de botones, porque es la única
+  // donde se marcan varias a la vez.
+  pintarAcciones();
+
+  // 11 · Categoría de peligro, y 11b el peligro concreto dentro de ella
+  llenarSelect('h-peligro', c.hse.categorias, HSE.peligro, true);
+  pintarPeligrosItems();
+}
+
+
+// Rellena un desplegable. El primer renglón siempre es "elige una opción",
+// para que nunca quede contestado por descuido con la primera de la lista.
+function llenarSelect(id, items, elegido, conVacio) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+
+  sel.innerHTML = '';
+
+  if (conVacio) {
+    const v = document.createElement('option');
+    v.value = '';
+    v.textContent = t('h_elegir');
+    sel.appendChild(v);
+  }
+
+  (items || []).forEach(function (op) {
+    const o = document.createElement('option');
+    o.value = op.code;
+    o.textContent = op.label;
+    sel.appendChild(o);
+  });
+
+  sel.value = elegido || '';
+  sel.disabled = (items || []).length === 0;
+}
+
+// ── Los tres encadenados: país → sitio → cliente ──────────────────────────
+
+function sitiosDelPais() {
+  if (!HSE.pais) return [];
+  return (CATALOGOS.sitios || []).filter((s) => s.country_code === HSE.pais);
+}
+
+function pintarSitios() {
+  const lista = sitiosDelPais();
+  llenarSelect('h-sitio', lista.map((s) => ({ code: s.id, label: s.name })), HSE.site_id, true);
+
+  const ayuda = document.getElementById('h-sitio-ayuda');
+  if (!HSE.pais) {
+    ayuda.textContent = t('h_elige_pais');
+    ayuda.style.display = '';
+  } else {
+    ayuda.style.display = 'none';
+  }
+}
+
+function pintarClientes() {
+  const sel   = document.getElementById('h-cliente');
+  const texto = document.getElementById('h-cliente-texto');
+  const ayuda = document.getElementById('h-cliente-ayuda');
+
+  const sitio = (CATALOGOS.sitios || []).find((s) => s.id === HSE.site_id);
+  const clientes = (sitio && sitio.customer) ? [sitio.customer] : [];
+
+  if (clientes.length > 0) {
+    sel.style.display = '';
+    texto.style.display = 'none';
+    llenarSelect('h-cliente', clientes.map((x) => ({ code: x, label: x })), HSE.cliente || clientes[0], false);
+    HSE.cliente = document.getElementById('h-cliente').value;
+    ayuda.style.display = 'none';
+  } else if (HSE.site_id) {
+    // El sitio no tiene cliente registrado: se escribe a mano.
+    sel.style.display = 'none';
+    texto.style.display = '';
+    ayuda.style.display = 'none';
+  } else {
+    sel.style.display = '';
+    texto.style.display = 'none';
+    llenarSelect('h-cliente', [], '', true);
+    ayuda.textContent = t('h_elige_sitio');
+    ayuda.style.display = '';
+  }
+}
+
+function alCambiarDepartamento() {
+  HSE.departamento = document.getElementById('h-departamento').value;
+  limpiarErrorHse();
+}
+
+function alCambiarPais() {
+  HSE.pais = document.getElementById('h-pais').value;
+  HSE.site_id = null;                 // el sitio de otro país ya no vale
+  HSE.cliente = '';
+  pintarSitios();
+  pintarClientes();
+  limpiarErrorHse();
+}
+
+function alCambiarSitio() {
+  HSE.site_id = document.getElementById('h-sitio').value || null;
+  HSE.cliente = '';
+  pintarClientes();
+  limpiarErrorHse();
+}
+
+function alCambiarClasificacion() {
+  HSE.clasificacion = document.getElementById('h-clasificacion').value;
+  const otra = CATALOGOS.hse.clasificaciones.find((x) => x.code === HSE.clasificacion);
+  document.getElementById('h-clasif-otro-caja').style.display = (otra && otra.is_other) ? '' : 'none';
+  limpiarErrorHse();
+}
+
+// ── Categoría de peligro → peligro concreto ───────────────────────────────
+
+function peligrosDeCategoria() {
+  if (!HSE.peligro) return [];
+  return (CATALOGOS.hse.peligros || []).filter((x) => x.parent_code === HSE.peligro);
+}
+
+function pintarPeligrosItems() {
+  const lista = peligrosDeCategoria();
+  llenarSelect('h-peligro-item', lista, HSE.peligro_item, true);
+
+  const ayuda = document.getElementById('h-peligro-ayuda');
+  if (!HSE.peligro) {
+    ayuda.textContent = t('h_elige_categoria');
+    ayuda.style.display = '';
+  } else {
+    ayuda.style.display = 'none';
+  }
+}
+
+function alCambiarPeligro() {
+  HSE.peligro = document.getElementById('h-peligro').value;
+  HSE.peligro_item = '';
+  pintarPeligrosItems();
+  limpiarErrorHse();
+}
+// Solo la lista de acciones. Repintar el formulario entero al marcar una
+// acción borraba los desplegables ya contestados.
+function pintarAcciones() {
+  const c = CATALOGOS;
   listaOpciones(
     document.getElementById('h-acciones'),
     c.hse.acciones, true,
@@ -978,20 +1113,22 @@ function pintarOpcionesHse() {
     (code) => {
       const i = HSE.acciones.indexOf(code);
       if (i === -1) HSE.acciones.push(code); else HSE.acciones.splice(i, 1);
-      pintarOpcionesHse();
+      pintarAcciones();
       const hayOtra = c.hse.acciones.some((x) => x.is_other && HSE.acciones.indexOf(x.code) !== -1);
       document.getElementById('h-accion-otro-caja').style.display = hayOtra ? '' : 'none';
       limpiarErrorHse();
     }
   );
+}
 
-  // 11 · Categoría de peligro
-  listaOpciones(
-    document.getElementById('h-peligro'),
-    c.hse.categorias, false,
-    (code) => HSE.peligro === code,
-    (code) => { HSE.peligro = code; pintarOpcionesHse(); limpiarErrorHse(); }
-  );
+function alCambiarCliente() {
+  HSE.cliente = document.getElementById('h-cliente').value;
+  limpiarErrorHse();
+}
+
+function alCambiarPeligroItem() {
+  HSE.peligro_item = document.getElementById('h-peligro-item').value;
+  limpiarErrorHse();
 }
 
 function escaparHtml(s) {
@@ -1047,9 +1184,9 @@ function hsePasoValido() {
     if (v('h-fecha') > hoyLocal()) { errorHse(t('err_fecha_futura')); return false; }
     if (!v('h-hora'))        return falta('h_q3');
     if (!HSE.departamento)   return falta('h_q4');
-    if (!v('h-cliente'))     return falta('h_q5');
     if (!HSE.pais)           return falta('h_q6');
-    if (!v('h-sitio'))       return falta('h_q7');
+    if (!HSE.site_id)        return falta('h_q7');
+    if (!clienteElegido())   return falta('h_q5');
     return true;
   }
 
@@ -1064,6 +1201,7 @@ function hsePasoValido() {
 
   if (HSE_PASO === 3) {
     if (!HSE.peligro)        return falta('h_q11');
+    if (peligrosDeCategoria().length > 0 && !HSE.peligro_item) return falta('h_q11b');
     const hayOtra = CATALOGOS.hse.acciones.some(
       (x) => x.is_other && HSE.acciones.indexOf(x.code) !== -1);
     if (hayOtra && !v('h-accion-otro')) return falta('h_cual');
@@ -1174,10 +1312,16 @@ function pintarFotos() {
 
 // ── Envío ─────────────────────────────────────────────────────────────────
 
+// El cliente sale del desplegable, o del campo de texto si ese sitio todavía
+// no tiene cliente registrado.
+function clienteElegido() {
+  const sel = document.getElementById('h-cliente');
+  if (sel && sel.style.display !== 'none') return (sel.value || '').trim();
+  return (document.getElementById('h-cliente-texto').value || '').trim();
+}
+
 function armarReporteHse() {
   const v = (id) => (document.getElementById(id).value || '').trim();
-  const sitioEs = document.getElementById('h-sitio');
-  const esSelect = sitioEs && sitioEs.tagName === 'SELECT';
 
   return {
     employee_no:          SESION.employee_no,
@@ -1185,16 +1329,17 @@ function armarReporteHse() {
     occurred_date:        v('h-fecha'),
     occurred_time:        v('h-hora'),
     department_code:      HSE.departamento,
-    customer:             v('h-cliente'),
+    customer:             clienteElegido(),
     country_code:         HSE.pais,
-    site_id:              esSelect ? (v('h-sitio') || null) : null,
-    site_other:           esSelect ? null : v('h-sitio'),
+    site_id:              HSE.site_id || null,
+    site_other:           null,
     classification_code:  HSE.clasificacion,
     classification_other: v('h-clasif-otro') || null,
     description:          v('h-descripcion'),
     action_codes:         HSE.acciones.slice(),
     action_other:         v('h-accion-otro') || null,
     hazard_category_code: HSE.peligro,
+    hazard_item_code:     HSE.peligro_item || null,
     tz:                   ZONA,
     lang:                 IDIOMA,
   };
