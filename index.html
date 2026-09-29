@@ -259,6 +259,46 @@
   .fila-botones { display: flex; gap: 10px; margin-top: 22px; }
   .fila-botones .btn { margin: 0; flex: 1; }
 
+
+  /* ── Inspección de vehículo ───────────────────────────────────────────── */
+  .veh-seccion {
+    font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--azul); margin: 22px 0 2px;
+  }
+  .pregunta { padding: 13px 0; border-bottom: 1px solid var(--linea); }
+  .pregunta:last-child { border-bottom: none; }
+  .pregunta-texto { font-size: 15px; line-height: 1.35; margin-bottom: 9px; }
+  .pregunta-num { color: var(--gris); font-weight: 700; }
+  .sino { display: flex; gap: 9px; }
+  .sino-btn {
+    flex: 1; padding: 11px 0; border-radius: 10px;
+    border: 2px solid var(--azul); background: var(--blanco); color: var(--azul);
+    font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .sino-btn.elegido { background: var(--azul); color: #fff; }
+  .sino-btn.elegido.malo { background: var(--rojo); border-color: var(--rojo); }
+  .foto-slot {
+    position: relative; border-radius: var(--radio); overflow: hidden;
+    border: 2px solid var(--linea); background: var(--blanco); aspect-ratio: 4/3; max-width: 260px;
+  }
+  .foto-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .foto-slot button {
+    position: absolute; top: 6px; right: 6px;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: none; background: rgba(0,0,0,.65); color: #fff;
+    font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .aviso-def {
+    margin: 16px 0 0; padding: 12px 14px; border-radius: var(--radio);
+    background: #fef3c7; border: 2px solid var(--ambar); color: #78350f;
+    font-size: 14px; line-height: 1.4;
+  }
+  .aviso-ok {
+    margin: 16px 0 0; padding: 12px 14px; border-radius: var(--radio);
+    background: #dcfce7; border: 2px solid var(--verde); color: #14532d;
+    font-size: 14px; font-weight: 600;
+  }
+
   /* ── Acordeón de categorías de peligro ────────────────────────────────── */
   .acordeon {
     border: 2px solid var(--linea);
@@ -485,14 +525,29 @@
     <button class="btn" onclick="ir('p-tipo')" data-t="listo_otro"></button>
   </section>
 
-  <!-- ══ 6 · Formulario de vehículos · BLOQUE 10 ════════════════════════ -->
-  <section class="pantalla" id="p-formulario">
-    <h1 id="f-titulo"></h1>
-    <div class="aviso">
-      <b data-t="pendiente_titulo"></b>
-      <span data-t="pendiente_texto"></span>
+  <!-- ══ 6 · Inspección de vehículo · BLOQUE 10 ════════════════════════ -->
+  <section class="pantalla" id="p-vehiculo">
+    <div class="pasos" id="veh-pasos">
+      <span></span><span></span><span></span><span></span><span></span>
     </div>
-    <button class="btn secundario" style="margin-top:20px" onclick="ir('p-tipo')" data-t="volver"></button>
+    <div class="paso-de" id="veh-paso-de"></div>
+    <h1 id="veh-titulo"></h1>
+
+    <!-- Todo el cuerpo se dibuja desde el catálogo: si mañana cambia una
+         pregunta en la base, la app la muestra sin tocar este archivo. -->
+    <div id="veh-cuerpo"></div>
+    <div id="veh-resumen"></div>
+
+    <div class="error" id="v-error"></div>
+
+    <div class="fila-botones">
+      <button class="btn secundario" id="v-atras" onclick="vehPasoAtras()" data-t="atras"></button>
+      <button class="btn" id="v-siguiente" onclick="vehPasoSiguiente()" data-t="siguiente"></button>
+    </div>
+    <button class="btn texto" onclick="cancelarVeh()" data-t="cancelar"></button>
+
+    <input type="file" id="v-camara" accept="image/*" capture="environment" onchange="alElegirFotoVeh(this)">
+    <input type="file" id="v-galeria" accept="image/*" onchange="alElegirFotoVeh(this)">
   </section>
 
 </main>
@@ -518,7 +573,7 @@ const API = CONFIG.SUPABASE_URL + '/functions/v1/empleado-api';
 // ══════════════════════════════════════════════════════════════════════════
 // 2 · TEXTOS DE LA APP
 //
-// Las preguntas de los formularios vi|enen de la base de datos, traducidas.
+// Las preguntas de los formularios vienen de la base de datos, traducidas.
 // Pero estos textos —botones, avisos, errores— tienen que estar AQUÍ dentro,
 // porque la app debe poder saludarte y decirte "no hay señal" justamente
 // cuando no hay señal para ir a buscarlos.
@@ -543,6 +598,7 @@ const TEXTOS = {
     err_bloqueado:     'Demasiados intentos. Vuelve a intentarlo en unos minutos.',
     err_sin_red:       'No hay conexión. Necesitas señal para entrar la primera vez.',
     err_servidor:      'No se pudo conectar con el servidor. Inténtalo de nuevo.',
+    err_config:        'La app no pudo hablar con el servidor. Avisa a tu administrador de HSE:',
 
     tipo_titulo:       '¿Qué vas a reportar?',
     tipo_sub:          'Elige el tipo de registro.',
@@ -559,8 +615,22 @@ const TEXTOS = {
     pendientes_uno:    '1 reporte esperando señal para enviarse',
     pendientes_varios: '{n} reportes esperando señal para enviarse',
 
-    pendiente_titulo:  'Este formulario todavía no está',
-    pendiente_texto:   'Llega en el siguiente bloque. Lo que ya funciona es el idioma, tu acceso y la elección del tipo de reporte.',
+    v_paso:            'Paso {n} de 5',
+    v_si:              'Sí',
+    v_no:              'No',
+    v_pais:            'País de operaciones',
+    v_sitio:           'Sitio / Ubicación',
+    v_enviar:          'Enviar inspección',
+    v_listo_titulo:    'Inspección enviada',
+    v_listo_detalle:   'Guárdate el folio por si necesitas consultarla después.',
+    v_def_una:         'Hay 1 deficiencia en esta sección. Descríbela en la caja de comentarios antes de seguir.',
+    v_def_varias:      'Hay {n} deficiencias en esta sección. Descríbelas en la caja de comentarios antes de seguir.',
+    v_sin_def:         'Sin deficiencias en esta sección.',
+    v_falta_foto:      'Falta la foto: ',
+    v_falta_com:       'Marcaste una deficiencia. Descríbela en la caja de comentarios de esta sección.',
+    v_odo_malo:        'La lectura del odómetro tiene que ser un número de cero en adelante.',
+    v_fecha_futura:    'La fecha de inspección no puede ser posterior a hoy.',
+    v_placa_ph:        'Ej. ABC-1234',
 
     // ── Formulario de HSE ──────────────────────────────────────────────
     h_titulo:      'Observación / Incidente de HSE',
@@ -631,6 +701,7 @@ const TEXTOS = {
     err_bloqueado:     'Too many attempts. Please try again in a few minutes.',
     err_sin_red:       'No connection. You need signal to sign in the first time.',
     err_servidor:      'Could not reach the server. Please try again.',
+    err_config:        'The app could not reach the server. Tell your HSE administrator:',
 
     tipo_titulo:       'What are you reporting?',
     tipo_sub:          'Choose the type of record.',
@@ -647,8 +718,22 @@ const TEXTOS = {
     pendientes_uno:    '1 report waiting for signal',
     pendientes_varios: '{n} reports waiting for signal',
 
-    pendiente_titulo:  'This form is not here yet',
-    pendiente_texto:   'It arrives in the next block. What already works: the language, your sign-in, and choosing the type of report.',
+    v_paso:            'Step {n} of 5',
+    v_si:              'Yes',
+    v_no:              'No',
+    v_pais:            'Country of operations',
+    v_sitio:           'Site / Location',
+    v_enviar:          'Submit inspection',
+    v_listo_titulo:    'Inspection submitted',
+    v_listo_detalle:   'Keep the number in case you need to look it up later.',
+    v_def_una:         'There is 1 deficiency in this section. Describe it in the comments box before moving on.',
+    v_def_varias:      'There are {n} deficiencies in this section. Describe them in the comments box before moving on.',
+    v_sin_def:         'No deficiencies in this section.',
+    v_falta_foto:      'Missing photo: ',
+    v_falta_com:       'You flagged a deficiency. Describe it in this section\'s comments box.',
+    v_odo_malo:        'The odometer reading must be a number, zero or higher.',
+    v_fecha_futura:    'The inspection date cannot be later than today.',
+    v_placa_ph:        'e.g. ABC-1234',
 
     // ── HSE form ───────────────────────────────────────────────────────
     h_titulo:      'HSE Observation / Incident',
@@ -810,7 +895,15 @@ async function api(accion, extra) {
   let datos = null;
   try { datos = await r.json(); } catch (e) { datos = null; }
 
-  if (!datos) throw new Error('respuesta-ilegible');
+  if (!datos || typeof datos !== 'object') {
+    const e = new Error('respuesta-ilegible');
+    e.http = r.status;
+    throw e;
+  }
+
+  // El estado HTTP viaja con la respuesta. Sirve para distinguir un rechazo
+  // legítimo del servidor (llave mala, función caída) de un "no coincide".
+  datos.__http = r.status;
   return datos;
 }
 
@@ -827,6 +920,21 @@ function alEscribirNumero() {
   const campo = document.getElementById('a-numero');
   campo.value = campo.value.replace(/\D/g, '').slice(0, 4);
   limpiarError();
+}
+
+// Muestra un texto ya armado, sin pasar por el diccionario.
+function mostrarTexto(texto) {
+  const caja = document.getElementById('a-error');
+  caja.textContent = texto;
+  caja.classList.add('visible');
+}
+
+// Saca del cuerpo de la respuesta algo que un administrador pueda buscar.
+function detalleServidor(r) {
+  const msg = r && (r.error || r.message || r.msg || r.error_description);
+  const http = r && r.__http ? 'HTTP ' + r.__http : '';
+  if (msg && http) return http + ' · ' + msg;
+  return msg || http || 'sin detalle';
 }
 
 function mostrarError(clave) {
@@ -857,9 +965,16 @@ async function entrar() {
     const r = await api('login', { employee_no: numero, full_name: nombre });
 
     if (!r.ok) {
-      if (r.motivo === 'INACTIVO')        mostrarError('err_inactivo');
-      else if (r.motivo === 'BLOQUEADO')  mostrarError('err_bloqueado');
-      else                                mostrarError('err_no_coincide');
+      if (r.motivo === 'INACTIVO')             mostrarError('err_inactivo');
+      else if (r.motivo === 'BLOQUEADO')       mostrarError('err_bloqueado');
+      else if (r.motivo === 'NO_COINCIDE' ||
+               r.motivo === 'DATOS_INVALIDOS') mostrarError('err_no_coincide');
+      else {
+        // No hubo veredicto de acceso: el problema es del servidor o de la
+        // configuración. Decirle "tu nombre no coincide" sería mentirle y
+        // dejaría a la persona buscando en el lugar equivocado.
+        mostrarTexto(t('err_config') + ' ' + detalleServidor(r));
+      }
       return;
     }
 
@@ -931,9 +1046,9 @@ async function elegirTipo(tipo) {
     return;
   }
 
-  // ═══ BLOQUE 10 · aquí entra el formulario de Vehicle Inspection ═══
-  document.getElementById('f-titulo').textContent = t('tipo_vehiculo');
-  ir('p-formulario');
+  if (!catalogosCompletos(CATALOGOS)) await precargarCatalogos();
+  if (!catalogosCompletos(CATALOGOS)) { alert(t('err_sin_catalogos')); return; }
+  abrirVehiculo();
 }
 
 
@@ -1553,6 +1668,588 @@ function mostrarListo(folio) {
 
 
 // ══════════════════════════════════════════════════════════════════════════
+// 8c · INSPECCIÓN DE VEHÍCULO · las 47 preguntas del formulario
+//
+// El formulario NO está escrito a mano aquí: se dibuja a partir del catálogo
+// que manda la base de datos. Si mañana cambia el texto de una pregunta, o se
+// añade una, la app la muestra sola. Lo único que vive en este archivo es cómo
+// se ve y cuándo deja pasar al siguiente paso.
+//
+// Cinco pasos, uno por sección del formulario:
+//   1 · Datos del vehículo   2 · Exterior   3 · Interior
+//   4 · Funcionamiento       5 · Bajo el cofre y comentarios finales
+//
+// Las 34 preguntas de sí/no se contestan una por una, a propósito: no hay
+// botón de "todo bien". Las 5 fotos son obligatorias.
+// ══════════════════════════════════════════════════════════════════════════
+
+const VEH_PASOS = 5;
+
+// Qué secciones del catálogo salen en cada paso.
+const VEH_MAPA = [
+  ['vehicle_data'],
+  ['vehicle_exterior'],
+  ['vehicle_interior'],
+  ['vehicle_operating'],
+  ['vehicle_hood', 'vehicle_comments'],
+];
+
+let VEH_PASO = 1;
+let VEH = null;        // { pais, site_id, respuestas:{}, comentarios:{} }
+let VEH_FOTOS = {};    // { PHOTO_FRONT: {nombre, mime, base64, vista}, … }
+let VEH_SLOT = null;   // a qué ranura va la foto que se está eligiendo
+let VEH_NUM = {};      // código → número de pregunta (1 … 47)
+let VEH_PREG = {};     // código → la pregunta completa
+
+function seccionVeh(clave) {
+  return ((CATALOGOS && CATALOGOS.vehiculo) || []).find((s) => s.key === clave) || null;
+}
+
+function seccionesDelPaso(paso) {
+  return VEH_MAPA[paso - 1].map(seccionVeh).filter(Boolean);
+}
+
+// Numera las 47 preguntas de corrido, en el orden del formulario.
+function numerarVeh() {
+  VEH_NUM = {};
+  VEH_PREG = {};
+  let n = 0;
+  VEH_MAPA.forEach(function (claves) {
+    claves.forEach(function (clave) {
+      const sec = seccionVeh(clave);
+      if (!sec) return;
+      (sec.preguntas || []).forEach(function (p) {
+        n += 1;
+        VEH_NUM[p.code] = n;
+        VEH_PREG[p.code] = p;
+      });
+    });
+  });
+}
+
+// Una respuesta es deficiencia según la polaridad de la pregunta: en casi
+// todas, "No" es lo malo; en "¿hay fuga de líquidos?" lo malo es el "Sí".
+function esDeficiencia(preg, valor) {
+  if (valor === undefined || valor === null) return false;
+  return preg.yes_is_bad ? valor === true : valor === false;
+}
+
+function deficienciasDeSeccion(sec) {
+  let n = 0;
+  (sec.preguntas || []).forEach(function (p) {
+    if (p.answer_type === 'yesno' && esDeficiencia(p, VEH.respuestas[p.code])) n += 1;
+  });
+  return n;
+}
+
+function deficienciasDelPaso(paso) {
+  return seccionesDelPaso(paso).reduce((n, sec) => n + deficienciasDeSeccion(sec), 0);
+}
+
+function abrirVehiculo() {
+  VEH = {
+    pais: SESION.country_code || 'US',
+    site_id: null,
+    respuestas: {},
+    comentarios: {},
+  };
+  VEH_FOTOS = {};
+  VEH_SLOT = null;
+  VEH_PASO = 1;
+  numerarVeh();
+  vehPintarPaso();
+  ir('p-vehiculo');
+}
+
+function cancelarVeh() {
+  VEH = null;
+  VEH_FOTOS = {};
+  ir('p-tipo');
+}
+
+// "Falta contestar: …", con el mismo texto que usa el formulario de HSE.
+// Ojo: la función falta() de HSE recibe una CLAVE de texto; esta recibe la
+// etiqueta ya traducida, porque las preguntas del vehículo vienen de la base.
+function faltaVeh(campo) {
+  return t('err_falta').replace('{campo}', campo);
+}
+
+function errorVeh(texto) {
+  const caja = document.getElementById('v-error');
+  caja.textContent = texto;
+  caja.classList.add('visible');
+  caja.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function limpiarErrorVeh() {
+  document.getElementById('v-error').classList.remove('visible');
+}
+
+
+// ── Dibujo del paso ───────────────────────────────────────────────────────
+
+function vehPintarPaso() {
+  const pasos = document.getElementById('veh-pasos').children;
+  for (let i = 0; i < pasos.length; i++) {
+    pasos[i].className = (i < VEH_PASO) ? 'hecho' : '';
+  }
+  document.getElementById('veh-paso-de').textContent = t('v_paso').replace('{n}', VEH_PASO);
+
+  const secs = seccionesDelPaso(VEH_PASO);
+  document.getElementById('veh-titulo').textContent = secs.length ? secs[0].titulo : '';
+
+  const cuerpo = document.getElementById('veh-cuerpo');
+  cuerpo.innerHTML = '';
+
+  secs.forEach(function (sec, i) {
+    // El título de la primera sección ya está arriba, en el h1.
+    if (i > 0) {
+      const h = document.createElement('div');
+      h.className = 'veh-seccion';
+      h.textContent = sec.titulo;
+      cuerpo.appendChild(h);
+    }
+    (sec.preguntas || []).forEach(function (p) {
+      cuerpo.appendChild(pintarPreguntaVeh(p));
+    });
+  });
+
+  if (VEH_PASO === 1) cuerpo.appendChild(pintarSitioVeh());
+
+  document.getElementById('v-atras').style.visibility = (VEH_PASO === 1) ? 'hidden' : 'visible';
+  document.getElementById('v-siguiente').textContent =
+    (VEH_PASO === VEH_PASOS) ? t('v_enviar') : t('siguiente');
+
+  actualizarResumenVeh();
+  limpiarErrorVeh();
+  window.scrollTo(0, 0);
+}
+
+function pintarPreguntaVeh(p) {
+  if (p.answer_type === 'yesno')    return filaSiNo(p);
+  if (p.answer_type === 'photo')    return ranuraFoto(p);
+  if (p.answer_type === 'longtext') return cajaComentario(p);
+  return campoDato(p);
+}
+
+function etiquetaVeh(p, obligatoria) {
+  const l = document.createElement('div');
+  l.className = 'pregunta-texto';
+  const n = document.createElement('span');
+  n.className = 'pregunta-num';
+  n.textContent = VEH_NUM[p.code] + ' · ';
+  l.appendChild(n);
+  l.appendChild(document.createTextNode(p.label));
+  if (obligatoria) {
+    const r = document.createElement('span');
+    r.className = 'obligatorio';
+    r.textContent = ' *';
+    l.appendChild(r);
+  }
+  return l;
+}
+
+function filaSiNo(p) {
+  const d = document.createElement('div');
+  d.className = 'pregunta';
+  d.id = 'veh-q-' + p.code;
+  d.appendChild(etiquetaVeh(p, true));
+
+  const g = document.createElement('div');
+  g.className = 'sino';
+  [[t('v_si'), true], [t('v_no'), false]].forEach(function (par) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = par[0];
+    const elegido = VEH.respuestas[p.code] === par[1];
+    b.className = 'sino-btn' + (elegido ? ' elegido' : '') +
+                  (elegido && esDeficiencia(p, par[1]) ? ' malo' : '');
+    b.onclick = function () { responderVeh(p.code, par[1]); };
+    g.appendChild(b);
+  });
+  d.appendChild(g);
+  return d;
+}
+
+// Se redibuja SOLO la pregunta tocada. Redibujar el paso entero borraría lo
+// que la persona lleve escrito en las cajas de comentarios.
+function responderVeh(code, valor) {
+  VEH.respuestas[code] = valor;
+  const fila = document.getElementById('veh-q-' + code);
+  if (fila && fila.parentNode) fila.parentNode.replaceChild(filaSiNo(VEH_PREG[code]), fila);
+  actualizarResumenVeh();
+  limpiarErrorVeh();
+}
+
+function cajaComentario(p) {
+  const d = document.createElement('div');
+  d.className = 'pregunta';
+  d.id = 'veh-q-' + p.code;
+  d.appendChild(etiquetaVeh(p, false));
+
+  const ta = document.createElement('textarea');
+  ta.id = 'v-txt-' + p.code;
+  ta.value = VEH.comentarios[p.code] || '';
+  ta.oninput = function () {
+    VEH.comentarios[p.code] = ta.value;
+    limpiarErrorVeh();
+  };
+  d.appendChild(ta);
+  return d;
+}
+
+function campoDato(p) {
+  const d = document.createElement('div');
+  d.className = 'pregunta';
+  d.id = 'veh-q-' + p.code;
+  d.appendChild(etiquetaVeh(p, true));
+
+  const i = document.createElement('input');
+  i.id = 'v-' + p.code;
+  i.type = (p.answer_type === 'number') ? 'number'
+         : (p.answer_type === 'date')   ? 'date' : 'text';
+  if (p.answer_type === 'number') { i.min = '0'; i.inputMode = 'numeric'; }
+  if (p.code === 'DRIVER_NAME')   { i.autocomplete = 'name'; i.value = SESION.full_name || ''; }
+  if (p.code === 'INSPECTION_DATE') i.value = hoyLocal();
+  if (p.code === 'LICENSE_PLATE') { i.placeholder = t('v_placa_ph'); i.autocapitalize = 'characters'; }
+  VEH.datos = VEH.datos || {};
+  if (VEH.datos[p.code] !== undefined) i.value = VEH.datos[p.code];
+  else VEH.datos[p.code] = i.value;      // lo prellenado también es un dato
+
+  i.oninput = function () {
+    VEH.datos[p.code] = i.value;
+    limpiarErrorVeh();
+  };
+  d.appendChild(i);
+  return d;
+}
+
+// País → sitio, igual que en el formulario de HSE.
+function pintarSitioVeh() {
+  const caja = document.createElement('div');
+
+  const l1 = document.createElement('label');
+  l1.textContent = t('v_pais');
+  const r1 = document.createElement('span');
+  r1.className = 'obligatorio'; r1.textContent = ' *';
+  l1.appendChild(r1);
+  const selPais = document.createElement('select');
+  selPais.id = 'v-pais';
+  ((CATALOGOS && CATALOGOS.paises) || []).forEach(function (c) {
+    const o = document.createElement('option');
+    o.value = c.code;
+    o.textContent = (IDIOMA === 'es') ? c.name_es : c.name_en;
+    if (c.code === VEH.pais) o.selected = true;
+    selPais.appendChild(o);
+  });
+  selPais.onchange = function () {
+    VEH.pais = selPais.value;
+    VEH.site_id = null;
+    llenarSitiosVeh();
+    limpiarErrorVeh();
+  };
+
+  const l2 = document.createElement('label');
+  l2.textContent = t('v_sitio');
+  const r2 = document.createElement('span');
+  r2.className = 'obligatorio'; r2.textContent = ' *';
+  l2.appendChild(r2);
+  const selSitio = document.createElement('select');
+  selSitio.id = 'v-sitio';
+  selSitio.onchange = function () {
+    VEH.site_id = selSitio.value || null;
+    limpiarErrorVeh();
+  };
+
+  caja.appendChild(l1); caja.appendChild(selPais);
+  caja.appendChild(l2); caja.appendChild(selSitio);
+
+  // Se llena después de estar en el documento, para poder buscarlo por id.
+  setTimeout(llenarSitiosVeh, 0);
+  return caja;
+}
+
+function llenarSitiosVeh() {
+  const sel = document.getElementById('v-sitio');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const vacio = document.createElement('option');
+  vacio.value = '';
+  vacio.textContent = t('h_elegir');
+  sel.appendChild(vacio);
+
+  ((CATALOGOS && CATALOGOS.sitios) || [])
+    .filter((s) => s.country_code === VEH.pais)
+    .forEach(function (s) {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = s.name;
+      if (s.id === VEH.site_id) o.selected = true;
+      sel.appendChild(o);
+    });
+}
+
+
+// ── Fotos, una por ranura ─────────────────────────────────────────────────
+
+function ranuraFoto(p) {
+  const d = document.createElement('div');
+  d.className = 'pregunta';
+  d.id = 'veh-q-' + p.code;
+  d.appendChild(etiquetaVeh(p, true));
+
+  const f = VEH_FOTOS[p.code];
+  if (f) {
+    const caja = document.createElement('div');
+    caja.className = 'foto-slot';
+    const img = document.createElement('img');
+    img.src = f.vista;
+    img.alt = p.label;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = '×';
+    b.onclick = function () { quitarFotoVeh(p.code); };
+    caja.appendChild(img);
+    caja.appendChild(b);
+    d.appendChild(caja);
+  } else {
+    const fila = document.createElement('div');
+    fila.className = 'botones-foto';
+    [['tomar_foto', 'v-camara'], ['elegir_foto', 'v-galeria']].forEach(function (par, i) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn' + (i === 1 ? ' secundario' : '');
+      b.textContent = t(par[0]);
+      b.onclick = function () { pedirFotoVeh(p.code, par[1]); };
+      fila.appendChild(b);
+    });
+    d.appendChild(fila);
+  }
+  return d;
+}
+
+function pedirFotoVeh(code, entradaId) {
+  VEH_SLOT = code;
+  document.getElementById(entradaId).click();
+}
+
+async function alElegirFotoVeh(entrada) {
+  const archivo = (entrada.files || [])[0];
+  entrada.value = '';
+  limpiarErrorVeh();
+  if (!archivo || !VEH_SLOT) return;
+
+  if (archivo.size > 10 * 1024 * 1024) { errorVeh(t('err_foto_grande')); return; }
+  try {
+    VEH_FOTOS[VEH_SLOT] = await comprimirFoto(archivo, 1600, 0.7);
+  } catch (e) {
+    errorVeh(t('err_foto_grande'));
+    return;
+  }
+  repintarRanura(VEH_SLOT);
+  VEH_SLOT = null;
+}
+
+function quitarFotoVeh(code) {
+  delete VEH_FOTOS[code];
+  repintarRanura(code);
+  limpiarErrorVeh();
+}
+
+function repintarRanura(code) {
+  const fila = document.getElementById('veh-q-' + code);
+  if (fila && fila.parentNode) fila.parentNode.replaceChild(ranuraFoto(VEH_PREG[code]), fila);
+}
+
+
+// ── Resumen de deficiencias del paso ──────────────────────────────────────
+
+function actualizarResumenVeh() {
+  const caja = document.getElementById('veh-resumen');
+  caja.innerHTML = '';
+  if (VEH_PASO === 1) return;
+
+  const n = deficienciasDelPaso(VEH_PASO);
+  const d = document.createElement('div');
+  if (n === 0) {
+    d.className = 'aviso-ok';
+    d.textContent = t('v_sin_def');
+  } else {
+    d.className = 'aviso-def';
+    d.textContent = (n === 1) ? t('v_def_una') : t('v_def_varias').replace('{n}', n);
+  }
+  caja.appendChild(d);
+}
+
+
+// ── Validación ────────────────────────────────────────────────────────────
+
+// Muestra el aviso y lleva la pantalla hasta la pregunta que falta.
+function avisarFalta(code, texto) {
+  errorVeh(texto);
+  const fila = document.getElementById('veh-q-' + code);
+  if (fila) fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return false;
+}
+
+function vehValidarPaso() {
+  const secs = seccionesDelPaso(VEH_PASO);
+
+  if (VEH_PASO === 1) {
+    const dato = (code) => (((VEH.datos || {})[code]) || '').trim();
+
+    if (!dato('DRIVER_NAME'))   { errorVeh(faltaVeh(VEH_PREG['DRIVER_NAME'].label)); return false; }
+    if (!dato('LICENSE_PLATE')) { errorVeh(faltaVeh(VEH_PREG['LICENSE_PLATE'].label)); return false; }
+
+    const odo = dato('ODOMETER');
+    if (odo === '' || !/^\d+$/.test(odo)) { errorVeh(t('v_odo_malo')); return false; }
+
+    const fecha = dato('INSPECTION_DATE');
+    if (!fecha) { errorVeh(faltaVeh(VEH_PREG['INSPECTION_DATE'].label)); return false; }
+    if (fecha > hoyLocal()) { errorVeh(t('v_fecha_futura')); return false; }
+
+    if (!VEH.site_id) { errorVeh(faltaVeh(t('v_sitio'))); return false; }
+    return true;
+  }
+
+  // Se revisa en el MISMO orden en que la persona ve las preguntas, para que
+  // el aviso señale lo primero que le falta y no lo último.
+  for (const sec of secs) {
+    for (const p of (sec.preguntas || [])) {
+      if (p.answer_type === 'yesno' && VEH.respuestas[p.code] === undefined) {
+        return avisarFalta(p.code, faltaVeh(VEH_NUM[p.code] + ' · ' + p.label));
+      }
+
+      // Una deficiencia sin explicación no le sirve a quien tiene que
+      // arreglar el vehículo: el comentario de la sección se vuelve
+      // obligatorio en cuanto algo sale mal.
+      if (p.answer_type === 'longtext' && p.code !== 'ADDITIONAL_COMMENTS'
+          && deficienciasDeSeccion(sec) > 0
+          && !((VEH.comentarios[p.code] || '').trim())) {
+        return avisarFalta(p.code, t('v_falta_com'));
+      }
+
+      if (p.answer_type === 'photo' && !VEH_FOTOS[p.code]) {
+        return avisarFalta(p.code, t('v_falta_foto') + p.label);
+      }
+    }
+  }
+  return true;
+}
+
+function vehPasoAtras() {
+  if (VEH_PASO > 1) { VEH_PASO -= 1; vehPintarPaso(); }
+}
+
+function vehPasoSiguiente() {
+  if (!vehValidarPaso()) return;
+  if (VEH_PASO < VEH_PASOS) { VEH_PASO += 1; vehPintarPaso(); return; }
+  enviarVehiculo();
+}
+
+
+// ── Envío ─────────────────────────────────────────────────────────────────
+
+function armarInspeccion() {
+  const dato = (code) => (((VEH.datos || {})[code]) || '').trim();
+  const com = (code) => ((VEH.comentarios[code] || '').trim() || null);
+
+  const respuestas = {};
+  Object.keys(VEH_PREG).forEach(function (code) {
+    if (VEH_PREG[code].answer_type === 'yesno') respuestas[code] = VEH.respuestas[code];
+  });
+
+  return {
+    employee_no:     SESION.employee_no,
+    driver_name:     dato('DRIVER_NAME'),
+    license_plate:   dato('LICENSE_PLATE').toUpperCase(),
+    odometer:        Number(dato('ODOMETER')),
+    inspection_date: dato('INSPECTION_DATE'),
+    site_id:         VEH.site_id || null,
+    site_other:      null,
+    answers:         respuestas,
+    ext_comments:        com('EXT_COMMENTS'),
+    int_comments:        com('INT_COMMENTS'),
+    ope_comments:        com('OPE_COMMENTS'),
+    hood_comments:       com('HOOD_COMMENTS'),
+    additional_comments: com('ADDITIONAL_COMMENTS'),
+    tz:   ZONA,
+    lang: IDIOMA,
+  };
+}
+
+// Mismo camino desde el botón de enviar y desde la cola, para que no haya dos
+// comportamientos distintos.
+async function mandarVehiculo(inspeccion, fotos) {
+  const r = await api('vehiculo-crear', { inspeccion: inspeccion });
+  if (!r.ok) throw new Error(r.error || 'error');
+
+  const folio = r.inspeccion.report_code;
+
+  for (const f of (fotos || [])) {
+    try {
+      await api('adjuntar', {
+        report_code: folio,
+        slot: f.slot,
+        file_name: f.nombre,
+        mime_type: f.mime,
+        base64: f.base64,
+      });
+    } catch (e) {
+      console.warn('No se pudo subir una foto de la inspección:', e);
+    }
+  }
+  return folio;
+}
+
+async function enviarVehiculo() {
+  const boton = document.getElementById('v-siguiente');
+  const inspeccion = armarInspeccion();
+  const fotos = Object.keys(VEH_FOTOS).map(function (slot) {
+    const f = VEH_FOTOS[slot];
+    return { slot: slot, nombre: f.nombre, mime: f.mime, base64: f.base64 };
+  });
+
+  if (!navigator.onLine) {
+    await colaGuardar({
+      id: 'veh-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      tipo: 'vehiculo',
+      inspeccion: inspeccion,
+      fotos: fotos,
+    });
+    mostrarListoVeh(null);
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = t('enviando');
+
+  try {
+    const folio = await mandarVehiculo(inspeccion, fotos);
+    mostrarListoVeh(folio);
+  } catch (e) {
+    errorVeh(t('err_envio') + ' ' + (e.message || ''));
+  } finally {
+    boton.disabled = false;
+    boton.textContent = t('v_enviar');
+  }
+}
+
+function mostrarListoVeh(folio) {
+  document.getElementById('listo-titulo').textContent =
+    folio ? t('v_listo_titulo') : t('listo_cola');
+  document.getElementById('listo-folio').textContent = folio || '';
+  document.getElementById('listo-detalle').textContent =
+    folio ? t('v_listo_detalle') : t('listo_cola_det');
+
+  VEH = null;
+  VEH_FOTOS = {};
+  pintarEstado();
+  ir('p-listo');
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
 // 9 · CATÁLOGOS · se guardan para poder llenar el formulario sin señal
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -1564,7 +2261,8 @@ function mostrarListo(folio) {
 function catalogosCompletos(c) {
   return !!(c && c.ok
     && Array.isArray(c.paises)  && c.paises.length > 0
-    && Array.isArray(c.vehiculo)
+    && Array.isArray(c.vehiculo) && c.vehiculo.length === 6
+    && c.vehiculo.every((s) => Array.isArray(s.preguntas) && s.preguntas.length > 0)
     && c.hse
     && Array.isArray(c.hse.departamentos)   && c.hse.departamentos.length > 0
     && Array.isArray(c.hse.clasificaciones) && c.hse.clasificaciones.length > 0
@@ -1674,7 +2372,7 @@ async function colaEnviar() {
           await mandarHse(p.reporte, p.fotos);
           await colaBorrar(p.id);
         } else if (p.tipo === 'vehiculo') {
-          // Bloque 10
+          await mandarVehiculo(p.inspeccion, p.fotos);
           await colaBorrar(p.id);
         }
       } catch (e) {
