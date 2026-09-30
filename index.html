@@ -676,7 +676,7 @@ const TEXTOS = {
     err_fecha_futura: 'La fecha no puede ser posterior a hoy.',
     err_max_fotos:    'Solo se pueden adjuntar 4 archivos.',
     err_foto_grande:  'Esa imagen pesa más de 10 MB.',
-    err_sin_catalogos: 'No se pudieron cargar las preguntas. Conéctate una vez y vuelve a intentarlo.',
+    err_sin_catalogos: 'No se pudieron cargar las preguntas: falta {detalle}. Conéctate una vez y vuelve a intentarlo. Si sigue igual, enséñale este mensaje a tu administrador de HSE.',
     err_envio:        'No se pudo enviar. Revisa lo que dice abajo e inténtalo otra vez.',
 
     listo_titulo:   'Reporte enviado',
@@ -779,7 +779,7 @@ const TEXTOS = {
     err_fecha_futura: 'The date cannot be later than today.',
     err_max_fotos:    'You can attach up to 4 files.',
     err_foto_grande:  'That image is larger than 10 MB.',
-    err_sin_catalogos: 'The questions could not be loaded. Connect once and try again.',
+    err_sin_catalogos: 'The questions could not be loaded: {detalle} is missing. Please connect once and try again. If it keeps happening, show this message to your HSE administrator.',
     err_envio:        'Could not submit. Check the message below and try again.',
 
     listo_titulo:   'Report submitted',
@@ -1039,16 +1039,18 @@ function arrancarSesion() {
 async function elegirTipo(tipo) {
   TIPO = tipo;
 
-  if (tipo === 'hse') {
-    if (!catalogosCompletos(CATALOGOS)) await precargarCatalogos();
-    if (!catalogosCompletos(CATALOGOS)) { alert(t('err_sin_catalogos')); return; }
-    abrirHse();
+  const revisar = (tipo === 'hse') ? queFaltaHse : queFaltaVehiculo;
+
+  if (revisar(CATALOGOS)) await precargarCatalogos();
+
+  const falta = revisar(CATALOGOS);
+  if (falta) {
+    alert(t('err_sin_catalogos').replace('{detalle}', falta));
     return;
   }
 
-  if (!catalogosCompletos(CATALOGOS)) await precargarCatalogos();
-  if (!catalogosCompletos(CATALOGOS)) { alert(t('err_sin_catalogos')); return; }
-  abrirVehiculo();
+  if (tipo === 'hse') abrirHse();
+  else abrirVehiculo();
 }
 
 
@@ -2258,17 +2260,39 @@ function mostrarListoVeh(folio) {
 // concretos— lo viejo se queda corto, y usarlo deja controles vacíos que el
 // usuario no puede rellenar. Por eso NUNCA se da por bueno lo guardado sin
 // comprobar antes que trae todo lo que hace falta.
+function listaCon(v) {
+  return Array.isArray(v) && v.length > 0;
+}
+
+// Devuelve QUÉ falta, o null si está todo. Decir "no se pudieron cargar las
+// preguntas" sin más deja a la persona sin nada que mirar y a ti sin nada que
+// arreglar: el nombre de lo que falta señala el sitio exacto del problema.
+function queFaltaHse(c) {
+  if (!c || !c.ok)                      return 'respuesta del servidor';
+  if (!listaCon(c.paises))              return 'países';
+  if (!c.hse)                           return 'preguntas de HSE';
+  if (!listaCon(c.hse.departamentos))   return 'departamentos';
+  if (!listaCon(c.hse.clasificaciones)) return 'clasificaciones';
+  if (!listaCon(c.hse.acciones))        return 'acciones inmediatas';
+  if (!listaCon(c.hse.categorias))      return 'categorías de peligro';
+  if (!listaCon(c.hse.peligros))        return 'peligros concretos';
+  return null;
+}
+
+function queFaltaVehiculo(c) {
+  if (!c || !c.ok)             return 'respuesta del servidor';
+  if (!listaCon(c.vehiculo))   return 'secciones del formulario de vehículo';
+  if (c.vehiculo.length !== 6) return 'secciones del vehículo (llegaron ' + c.vehiculo.length + ' de 6)';
+
+  const vacia = c.vehiculo.find((s) => !listaCon(s.preguntas));
+  if (vacia) return 'preguntas de la sección ' + vacia.key;
+  return null;
+}
+
+// Lo mínimo para poder usar la app sin señal. Un problema en el formulario de
+// vehículo NO debe dejar sin servicio al de HSE, ni al revés.
 function catalogosCompletos(c) {
-  return !!(c && c.ok
-    && Array.isArray(c.paises)  && c.paises.length > 0
-    && Array.isArray(c.vehiculo) && c.vehiculo.length === 6
-    && c.vehiculo.every((s) => Array.isArray(s.preguntas) && s.preguntas.length > 0)
-    && c.hse
-    && Array.isArray(c.hse.departamentos)   && c.hse.departamentos.length > 0
-    && Array.isArray(c.hse.clasificaciones) && c.hse.clasificaciones.length > 0
-    && Array.isArray(c.hse.acciones)        && c.hse.acciones.length > 0
-    && Array.isArray(c.hse.categorias)      && c.hse.categorias.length > 0
-    && Array.isArray(c.hse.peligros)        && c.hse.peligros.length > 0);
+  return queFaltaHse(c) === null;
 }
 
 async function precargarCatalogos() {
