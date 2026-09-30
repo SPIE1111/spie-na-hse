@@ -1045,7 +1045,10 @@ async function elegirTipo(tipo) {
 
   const falta = revisar(CATALOGOS);
   if (falta) {
-    alert(t('err_sin_catalogos').replace('{detalle}', falta));
+    const detalle = (falta === 'respuesta del servidor' && ULTIMO_ERROR_CATALOGOS)
+      ? falta + ' → ' + ULTIMO_ERROR_CATALOGOS
+      : falta;
+    alert(t('err_sin_catalogos').replace('{detalle}', detalle));
     return;
   }
 
@@ -2295,6 +2298,10 @@ function catalogosCompletos(c) {
   return queFaltaHse(c) === null;
 }
 
+// Por qué falló la última petición de catálogos. Sin esto, la app solo puede
+// decir "no hubo respuesta del servidor", que es justo lo que no ayuda a nadie.
+let ULTIMO_ERROR_CATALOGOS = '';
+
 async function precargarCatalogos() {
   // Lo guardado sirve de arranque, pero solo si está completo.
   const guardado = localStorage.getItem('spie_catalogos_' + IDIOMA);
@@ -2314,11 +2321,24 @@ async function precargarCatalogos() {
   // Con señal se piden SIEMPRE los frescos, aunque ya hubiera guardados.
   try {
     const r = await api('catalogos');
+
+    if (!r || !r.ok) {
+      ULTIMO_ERROR_CATALOGOS = detalleServidor(r);
+      return;
+    }
+
+    ULTIMO_ERROR_CATALOGOS = '';
     if (catalogosCompletos(r)) {
       CATALOGOS = r;
       localStorage.setItem('spie_catalogos_' + IDIOMA, JSON.stringify(r));
+    } else {
+      CATALOGOS = r;     // sirve para saber QUÉ falta, aunque no se guarde
     }
-  } catch (e) { /* sin red se sigue con lo guardado, si estaba completo */ }
+  } catch (e) {
+    ULTIMO_ERROR_CATALOGOS = navigator.onLine
+      ? (e.message || 'no se pudo conectar')
+      : '';
+  }
 }
 
 
