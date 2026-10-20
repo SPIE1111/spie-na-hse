@@ -569,6 +569,11 @@ const CONFIG = {
 
 const API = CONFIG.SUPABASE_URL + '/functions/v1/empleado-api';
 
+// El puente con SharePoint es otra función: se le avisa cuando el reporte YA
+// tiene todas sus fotos subidas. Avisar antes haría que el flujo creara el
+// elemento sin ellas.
+const API_SHAREPOINT = CONFIG.SUPABASE_URL + '/functions/v1/sharepoint-api';
+
 
 // ══════════════════════════════════════════════════════════════════════════
 // 2 · TEXTOS DE LA APP
@@ -905,6 +910,27 @@ async function api(accion, extra) {
   // legítimo del servidor (llave mala, función caída) de un "no coincide".
   datos.__http = r.status;
   return datos;
+}
+
+
+// Avisa de que el reporte está completo. NO se espera respuesta: el reporte
+// ya está guardado en la base y el folio ya es válido. Si este aviso no llega
+// —sin señal, la función caída— el reporte se queda pendiente y lo recoge el
+// siguiente aviso que mande cualquier otro teléfono. Hacer esperar a la
+// persona por esto sería cobrarle un retraso que no le corresponde.
+function avisarSharePoint(folio) {
+  if (!folio) return;
+  try {
+    fetch(API_SHAREPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + CONFIG.ANON_KEY,
+      },
+      body: JSON.stringify({ action: 'finalizar', report_code: folio, lang: IDIOMA }),
+    }).catch(function () { /* el reporte ya está a salvo */ });
+  } catch (e) { /* idem */ }
 }
 
 
@@ -1624,6 +1650,8 @@ async function mandarHse(reporte, fotos) {
       console.warn('No se pudo subir una foto:', e);
     }
   }
+
+  avisarSharePoint(folio);
   return folio;
 }
 
@@ -2204,6 +2232,8 @@ async function mandarVehiculo(inspeccion, fotos) {
       console.warn('No se pudo subir una foto de la inspección:', e);
     }
   }
+
+  avisarSharePoint(folio);
   return folio;
 }
 
