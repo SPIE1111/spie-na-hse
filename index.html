@@ -160,6 +160,16 @@
     font-size: 15px;
     font-weight: 600;
   }
+  .quien-soy {
+    display: none; margin-top: 16px; padding: 14px 16px;
+    background: #e8f0ff; border: 2px solid var(--azul); border-radius: var(--radio);
+  }
+  .quien-soy.visible { display: block; }
+  .quien-soy.buscando { background: var(--gris-claro); border-color: var(--linea); }
+  .quien-soy .etq { display: block; font-size: 12.5px; font-weight: 700; color: var(--gris);
+                    text-transform: uppercase; letter-spacing: .04em; }
+  .quien-soy .nom { font-size: 19px; font-weight: 800; color: var(--azul); }
+
   .error.visible { display: block; }
 
   .aviso {
@@ -401,8 +411,17 @@
     <input type="tel" id="a-numero" inputmode="numeric" maxlength="4" autocomplete="off"
            placeholder="0000" oninput="alEscribirNumero()">
 
-    <label for="a-nombre" data-t="acceso_nombre"></label>
-    <input type="text" id="a-nombre" autocomplete="name" placeholder="" oninput="limpiarError()">
+    <!-- El nombre ya no se escribe: lo trae el servidor en cuanto están los
+         cuatro dígitos. Es un recuadro de lectura, no un campo. -->
+    <div class="quien-soy" id="a-quien">
+      <span class="etq" data-t="acceso_eres"></span>
+      <span class="nom" id="a-nombre-visto"></span>
+    </div>
+
+    <div id="a-coord-caja" style="display:none">
+      <label for="a-coord" data-t="acceso_coordinador"></label>
+      <select id="a-coord" onchange="limpiarError()"></select>
+    </div>
 
     <div class="error" id="a-error"></div>
 
@@ -590,14 +609,17 @@ const API_SHAREPOINT = CONFIG.SUPABASE_URL + '/functions/v1/sharepoint-api';
 const TEXTOS = {
   es: {
     acceso_titulo:     'Identifícate',
-    acceso_sub:        'Escribe el número que te dio tu administrador y tu nombre.',
+    acceso_sub:        'Escribe el número que te dio tu administrador.',
     acceso_numero:     'Tu número de 4 dígitos',
-    acceso_nombre:     'Tu nombre completo',
-    acceso_nombre_ph:  'Como te dieron de alta',
+    acceso_eres:       'Eres',
+    acceso_buscando:   'Buscando…',
+    acceso_coordinador:'Tu coordinador',
     acceso_btn:        'Entrar',
     acceso_ayuda:      'Si no tienes número, pídeselo a tu administrador de HSE.',
 
-    err_incompleto:    'Escribe tu número de 4 dígitos y tu nombre.',
+    err_incompleto:    'Escribe tu número de 4 dígitos.',
+    err_no_existe:     'Ese número no está dado de alta. Revísalo o pídeselo a tu administrador.',
+    err_sin_coord:     'Elige a tu coordinador.',
     err_no_coincide:   'El número y el nombre no coinciden. Revísalos e inténtalo otra vez.',
     err_inactivo:      'Tu cuenta está dada de baja. Habla con tu administrador de HSE.',
     err_bloqueado:     'Demasiados intentos. Vuelve a intentarlo en unos minutos.',
@@ -693,14 +715,17 @@ const TEXTOS = {
 
   en: {
     acceso_titulo:     'Sign in',
-    acceso_sub:        'Enter the number your administrator gave you, and your name.',
+    acceso_sub:        'Enter the number your administrator gave you.',
     acceso_numero:     'Your 4-digit number',
-    acceso_nombre:     'Your full name',
-    acceso_nombre_ph:  'As you were registered',
+    acceso_eres:       'You are',
+    acceso_buscando:   'Looking up…',
+    acceso_coordinador:'Your coordinator',
     acceso_btn:        'Sign in',
     acceso_ayuda:      'No number yet? Ask your HSE administrator for one.',
 
-    err_incompleto:    'Enter your 4-digit number and your name.',
+    err_incompleto:    'Enter your 4-digit number.',
+    err_no_existe:     'That number is not registered. Check it or ask your administrator.',
+    err_sin_coord:     'Choose your coordinator.',
     err_no_coincide:   'That number and name do not match. Please check and try again.',
     err_inactivo:      'Your account is inactive. Please talk to your HSE administrator.',
     err_bloqueado:     'Too many attempts. Please try again in a few minutes.',
@@ -833,9 +858,6 @@ function pintarTextos() {
     el.textContent = t(el.getAttribute('data-t'));
   });
 
-  const nombre = document.getElementById('a-nombre');
-  if (nombre) nombre.placeholder = t('acceso_nombre_ph');
-
   const cliTexto = document.getElementById('h-cliente-texto');
   if (cliTexto) cliTexto.placeholder = t('h_q5');
 
@@ -942,10 +964,104 @@ function limpiarError() {
   document.getElementById('a-error').classList.remove('visible');
 }
 
+// ── Identificación ────────────────────────────────────────────────────────
+//
+// El nombre ya no se escribe: en cuanto hay cuatro dígitos se le pregunta al
+// servidor de quién son y se enseña el nombre.
+//
+// Esto quita la segunda prueba que hacía el nombre escrito. Quien sepa el
+// número de un compañero puede reportar a su nombre. Es una decisión tomada
+// a cambio de que llenarlo en campo sea rápido, no un descuido.
+
+let IDENTIFICADO = null;   // el empleado que devolvió el servidor
+let TEMPORIZADOR_ID = null;
+
 function alEscribirNumero() {
   const campo = document.getElementById('a-numero');
   campo.value = campo.value.replace(/\D/g, '').slice(0, 4);
   limpiarError();
+
+  // Si cambia el número, lo identificado antes deja de valer.
+  IDENTIFICADO = null;
+  mostrarQuien(null);
+
+  if (TEMPORIZADOR_ID) clearTimeout(TEMPORIZADOR_ID);
+  if (!/^[1-9][0-9]{3}$/.test(campo.value)) return;
+
+  // Un respiro antes de preguntar: si alguien teclea 1-1-0-2 seguido, no
+  // tiene sentido mandar cuatro peticiones.
+  TEMPORIZADOR_ID = setTimeout(() => identificarNumero(campo.value), 250);
+}
+
+function mostrarQuien(nombre, buscando) {
+  const caja = document.getElementById('a-quien');
+  const nom = document.getElementById('a-nombre-visto');
+  if (!caja) return;
+  if (!nombre && !buscando) {
+    caja.classList.remove('visible', 'buscando');
+    document.getElementById('a-coord-caja').style.display = 'none';
+    return;
+  }
+  caja.classList.add('visible');
+  caja.classList.toggle('buscando', !!buscando);
+  nom.textContent = buscando ? t('acceso_buscando') : nombre;
+}
+
+async function identificarNumero(numero) {
+  if (!navigator.onLine) { mostrarError('err_sin_red'); return; }
+  mostrarQuien(null, true);
+
+  try {
+    const r = await api('identificar', { employee_no: numero });
+
+    if (!r.ok) {
+      mostrarQuien(null);
+      if (r.motivo === 'INACTIVO') mostrarError('err_inactivo');
+      else if (r.motivo === 'NO_EXISTE' || r.motivo === 'DATOS_INVALIDOS') mostrarError('err_no_existe');
+      else mostrarTexto(t('err_config') + ' ' + detalleServidor(r));
+      return;
+    }
+
+    IDENTIFICADO = r.empleado;
+    mostrarQuien(IDENTIFICADO.full_name);
+    await prepararCoordinadores();
+  } catch (e) {
+    mostrarQuien(null);
+    mostrarError(navigator.onLine ? 'err_servidor' : 'err_sin_red');
+  }
+}
+
+// Los coordinadores vienen en el catálogo. Si el catálogo todavía no está
+// cargado (primera vez en este teléfono), se pide ahora: para haber llegado
+// hasta aquí ya hubo que estar en línea.
+//
+// Si aun así no llegan, NO se bloquea el acceso: el coordinador es opcional
+// en la base, y dejar a alguien sin poder reportar un peligro por un
+// desplegable sería el peor intercambio posible.
+async function prepararCoordinadores() {
+  const caja = document.getElementById('a-coord-caja');
+  const sel = document.getElementById('a-coord');
+  if (!caja || !sel) return;
+
+  if (!CATALOGOS || !Array.isArray(CATALOGOS.coordinadores) || CATALOGOS.coordinadores.length === 0) {
+    await precargarCatalogos();
+  }
+
+  const lista = (CATALOGOS && CATALOGOS.coordinadores) || [];
+  if (lista.length === 0) { caja.style.display = 'none'; return; }
+
+  const antes = sel.value || (SESION && SESION.coordinator_code) || '';
+  sel.innerHTML = '';
+  const vacia = document.createElement('option');
+  vacia.value = ''; vacia.textContent = '—';
+  sel.appendChild(vacia);
+  lista.forEach((c) => {
+    const o = document.createElement('option');
+    o.value = c.code; o.textContent = c.name;
+    sel.appendChild(o);
+  });
+  sel.value = antes;
+  caja.style.display = '';
 }
 
 // Muestra un texto ya armado, sin pasar por el diccionario.
@@ -971,40 +1087,41 @@ function mostrarError(clave) {
 
 async function entrar() {
   const numero = (document.getElementById('a-numero').value || '').trim();
-  const nombre = (document.getElementById('a-nombre').value || '').trim();
 
-  if (!/^[1-9][0-9]{3}$/.test(numero) || nombre.length < 3) {
-    mostrarError('err_incompleto');
-    return;
-  }
-
-  if (!navigator.onLine) {
-    mostrarError('err_sin_red');
-    return;
-  }
+  if (!/^[1-9][0-9]{3}$/.test(numero)) { mostrarError('err_incompleto'); return; }
+  if (!navigator.onLine) { mostrarError('err_sin_red'); return; }
 
   const boton = document.getElementById('a-btn');
   boton.disabled = true;
   boton.textContent = t('entrando');
 
   try {
-    const r = await api('login', { employee_no: numero, full_name: nombre });
+    // Si todavía no se identificó (por ejemplo porque le dio a Entrar antes
+    // de que contestara el servidor), se identifica ahora.
+    if (!IDENTIFICADO || IDENTIFICADO.employee_no !== numero) {
+      await identificarNumero(numero);
+      if (!IDENTIFICADO) return;
+    }
 
-    if (!r.ok) {
-      if (r.motivo === 'INACTIVO')             mostrarError('err_inactivo');
-      else if (r.motivo === 'BLOQUEADO')       mostrarError('err_bloqueado');
-      else if (r.motivo === 'NO_COINCIDE' ||
-               r.motivo === 'DATOS_INVALIDOS') mostrarError('err_no_coincide');
-      else {
-        // No hubo veredicto de acceso: el problema es del servidor o de la
-        // configuración. Decirle "tu nombre no coincide" sería mentirle y
-        // dejaría a la persona buscando en el lugar equivocado.
-        mostrarTexto(t('err_config') + ' ' + detalleServidor(r));
-      }
+    // El coordinador solo se exige si hay lista de dónde elegirlo.
+    const caja = document.getElementById('a-coord-caja');
+    const coord = (document.getElementById('a-coord').value || '').trim();
+    if (caja && caja.style.display !== 'none' && !coord) {
+      mostrarError('err_sin_coord');
       return;
     }
 
-    SESION = r.empleado;
+    // Se guarda también el NOMBRE del coordinador, no solo su código. Al
+    // recargar la app, la cabecera se pinta antes de que llegue el catálogo,
+    // y sin el nombre guardado se veía "FRANCISCO_CASTILLO" en pantalla.
+    const selC = document.getElementById('a-coord');
+    const nomC = (selC && selC.selectedIndex > 0)
+      ? selC.options[selC.selectedIndex].textContent : '';
+
+    SESION = Object.assign({}, IDENTIFICADO, {
+      coordinator_code: coord || null,
+      coordinator_name: nomC || null,
+    });
     localStorage.setItem('spie_sesion', JSON.stringify(SESION));
 
     // Si el empleado tiene idioma guardado y todavía no había elegido uno
@@ -1029,16 +1146,32 @@ async function entrar() {
 }
 
 function entrarAlPanel() {
+  // En la cabecera va también el coordinador, para que se vea con qué está
+  // firmando antes de llenar nada y pueda corregirlo saliendo.
+  const coord = nombreCoordinador(SESION && SESION.coordinator_code);
   document.getElementById('cabecera-quien').textContent =
-    SESION.full_name + ' · ' + SESION.employee_no;
+    SESION.full_name + ' · ' + SESION.employee_no + (coord ? ' · ' + coord : '');
   ir('p-tipo');
+}
+
+function nombreCoordinador(code) {
+  if (!code) return '';
+  if (SESION && SESION.coordinator_code === code && SESION.coordinator_name) {
+    return SESION.coordinator_name;
+  }
+  const lista = (CATALOGOS && CATALOGOS.coordinadores) || [];
+  const c = lista.find((x) => x.code === code);
+  return c ? c.name : code;
 }
 
 function salir() {
   SESION = null;
+  IDENTIFICADO = null;
   localStorage.removeItem('spie_sesion');
   document.getElementById('cabecera-quien').textContent = '';
-  document.getElementById('a-nombre').value = '';
+  document.getElementById('a-numero').value = '';
+  mostrarQuien(null);
+  limpiarError();
   ir('p-acceso');
 }
 
@@ -1048,7 +1181,8 @@ function arrancarSesion() {
     try {
       SESION = JSON.parse(guardada);
       document.getElementById('a-numero').value = SESION.employee_no || '';
-      document.getElementById('a-nombre').value = SESION.full_name || '';
+      IDENTIFICADO = SESION;
+      mostrarQuien(SESION.full_name || '');
       entrarAlPanel();
       precargarCatalogos();
       return;
@@ -1623,6 +1757,7 @@ function armarReporteHse() {
     action_other:         v('h-accion-otro') || null,
     hazard_category_code: HSE.peligro,
     hazard_item_code:     HSE.peligro_item || null,
+    coordinator_code:     (SESION && SESION.coordinator_code) || null,
     tz:                   ZONA,
     lang:                 IDIOMA,
   };
@@ -2206,6 +2341,7 @@ function armarInspeccion() {
     ope_comments:        com('OPE_COMMENTS'),
     hood_comments:       com('HOOD_COMMENTS'),
     additional_comments: com('ADDITIONAL_COMMENTS'),
+    coordinator_code:    (SESION && SESION.coordinator_code) || null,
     tz:   ZONA,
     lang: IDIOMA,
   };
