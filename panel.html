@@ -191,6 +191,32 @@
   .alta .campo input, .alta .campo select { width: 100%; }
 
   .cargando { padding: 30px; text-align: center; color: var(--gris); }
+
+  /* ── Cumplimiento ─────────────────────────────────────────────────────── */
+  .metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+              gap: 12px; margin-bottom: 14px; }
+  .metrica { background: var(--blanco); border: 2px solid var(--linea);
+             border-radius: var(--radio); padding: 14px 16px; }
+  .metrica .num { font-size: 27px; font-weight: 800; color: var(--azul); line-height: 1.1; }
+  .metrica .etq { font-size: 12.5px; color: var(--gris); margin-top: 2px; }
+  .metrica.aviso .num { color: var(--ambar); }
+  .metrica.bien  .num { color: var(--verde); }
+  .lectura { background: var(--blanco); border: 2px solid var(--linea);
+             border-left: 5px solid var(--azul); border-radius: var(--radio);
+             padding: 13px 16px; margin: 0 0 16px; font-size: 14.5px; }
+
+  /* ── Hilo de seguimiento ──────────────────────────────────────────────── */
+  .comentario { background: var(--gris-claro); border-radius: 10px;
+                padding: 10px 12px; margin-bottom: 9px; }
+  .comentario .quien { font-size: 12px; font-weight: 800; color: var(--azul); }
+  .comentario .cuando { font-size: 11.5px; color: var(--gris); font-weight: 400; }
+  .comentario .cuerpo { font-size: 14.5px; margin-top: 3px; white-space: pre-wrap;
+                        word-break: break-word; }
+  .nuevo-com textarea {
+    width: 100%; padding: 10px; font-size: 14.5px; font-family: inherit;
+    border: 2px solid var(--linea); border-radius: 10px; resize: vertical;
+  }
+  .nuevo-com textarea:focus { outline: none; border-color: var(--azul); }
 </style>
 </head>
 
@@ -303,17 +329,90 @@
         </div>
       </div>
 
+      <!-- Edición de un empleado. Es el mismo formulario que el alta, con el
+           número ya puesto y sin posibilidad de cambiarlo: es la llave con la
+           que entra y con la que están firmados sus reportes. -->
+      <div class="alta" id="e-editar">
+        <h2 style="margin-top:0" data-t="emp_editar_titulo"></h2>
+        <div class="fila">
+          <div class="campo" style="max-width:110px"><label data-t="t_numero"></label>
+            <input type="text" id="x-numero" disabled></div>
+          <div class="campo"><label data-t="emp_nombre"></label>
+            <input type="text" id="x-nombre" autocomplete="off"></div>
+          <div class="campo"><label data-t="emp_departamento"></label>
+            <select id="x-depto"></select></div>
+        </div>
+        <div class="fila" style="margin-top:12px">
+          <div class="campo"><label data-t="emp_ubicacion"></label>
+            <select id="x-ubic" onchange="alCambiarUbicacionEdicion()"></select></div>
+          <div class="campo" id="x-pais-caja"><label data-t="emp_pais"></label>
+            <select id="x-pais"></select></div>
+          <div class="campo"><label data-t="emp_correo"></label>
+            <input type="email" id="x-correo" autocomplete="off"></div>
+          <div class="campo"><label data-t="emp_idioma"></label>
+            <select id="x-idioma"></select></div>
+        </div>
+        <div class="error" id="x-error"></div>
+        <div style="margin-top:16px; display:flex; gap:10px">
+          <button class="btn" id="x-guardar" onclick="guardarEdicion()" data-t="emp_guardar_cambios"></button>
+          <button class="btn secundario" onclick="cerrarEdicion()" data-t="cancelar"></button>
+        </div>
+      </div>
+
+      <!-- Alta masiva. Se pega desde una hoja de cálculo y cada renglón se
+           procesa por separado: uno malo no tumba a los demás. -->
+      <div class="alta" id="e-masiva">
+        <h2 style="margin-top:0" data-t="emp_masiva_titulo"></h2>
+        <p class="sub" data-t="emp_masiva_ayuda"></p>
+        <textarea id="m-texto" rows="8" spellcheck="false"
+          style="width:100%; padding:10px; font-size:14px; font-family:ui-monospace,Consolas,monospace;
+                 border:2px solid var(--linea); border-radius:9px; resize:vertical"></textarea>
+        <div class="error" id="m-error"></div>
+        <div style="margin-top:14px; display:flex; gap:10px">
+          <button class="btn" id="m-guardar" onclick="darDeAltaMasiva()" data-t="emp_masiva_btn"></button>
+          <button class="btn secundario" onclick="cerrarMasiva()" data-t="cancelar"></button>
+        </div>
+        <div id="m-resultado" style="margin-top:16px"></div>
+      </div>
+
       <div class="filtros">
         <div class="campo"><label data-t="f_estado"></label>
           <select id="e-estado" onchange="cargarEmpleados()"></select></div>
         <div class="campo crece"><label data-t="f_buscar_emp"></label>
           <input type="text" id="e-busca" oninput="pintarEmpleados()"></div>
         <button class="btn" id="e-nueva" onclick="abrirAlta()" data-t="emp_nueva"></button>
+        <button class="btn secundario" id="e-masiva-btn" onclick="abrirMasiva()" data-t="emp_masiva"></button>
         <button class="btn secundario" onclick="exportar('employees')" data-t="f_exportar"></button>
       </div>
 
       <div class="cuenta" id="e-cuenta"></div>
       <div class="caja-tabla"><table id="e-tabla"></table></div>
+    </section>
+
+    <!-- ── Cumplimiento ── -->
+    <section class="vista" id="v-compliance">
+      <h1 data-t="cum_titulo"></h1>
+      <p class="sub" data-t="cum_sub"></p>
+
+      <div class="filtros">
+        <div class="campo"><label data-t="f_mes"></label>
+          <input type="month" id="c-mes" onchange="cargarCumplimiento()"></div>
+        <div class="campo"><label data-t="f_pais"></label>
+          <select id="c-pais" onchange="cargarCumplimiento()"></select></div>
+        <div class="campo"><label data-t="f_quien"></label>
+          <select id="c-quien" onchange="pintarCumplimiento()"></select></div>
+        <div class="campo crece"><label data-t="f_buscar_emp"></label>
+          <input type="text" id="c-busca" oninput="pintarCumplimiento()"></div>
+        <button class="btn" onclick="exportar('compliance')" data-t="f_exportar"></button>
+      </div>
+
+      <!-- La lectura de los números, antes de la tabla. Una tabla sola no
+           dice si el mes va bien o mal. -->
+      <div id="c-metricas" class="metricas"></div>
+      <p class="lectura" id="c-lectura"></p>
+
+      <div class="cuenta" id="c-cuenta"></div>
+      <div class="caja-tabla"><table id="c-tabla"></table></div>
     </section>
   </main>
 </div>
@@ -340,7 +439,7 @@ const CONFIG = {
   // La misma llave anon pública que la app. Por sí sola no abre nada: sin
   // haber entrado con contraseña no se obtiene token, y sin token el servidor
   // no contesta a ninguna acción.
-  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkbGN2Y2ppaHZwd2lvbWdnc2dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5ODIxMTEsImV4cCI6MjEwNDU1ODExMX0.kk2W8L98cuUpqS0z3OVj3xJA5XkO4_1yYQr2VWaDXYY',
+  ANON_KEY: 'PEGA_AQUI_TU_ANON_KEY',
 };
 
 const API = CONFIG.SUPABASE_URL + '/functions/v1/panel-api';
@@ -372,21 +471,24 @@ const TEXTOS = {
     veh_titulo: 'Inspecciones de vehículo',
     veh_sub: 'Solo se muestran las de los países y parques que tienes asignados.',
     emp_titulo: 'Empleados',
-    emp_sub: 'Altas, bajas y desbloqueos. El número de 4 dígitos lo asigna el sistema.',
+    emp_sub: 'Altas, bajas y edición. El número de 4 dígitos lo asigna el sistema.',
+    cum_titulo: 'Cumplimiento del mes',
+    cum_sub: 'Del primer al último día del mes. Salen todos los activos, también los que no han subido nada.',
 
     f_desde: 'Desde', f_hasta: 'Hasta', f_pais: 'País', f_sitio: 'Sitio',
     f_clasificacion: 'Clasificación', f_buscar: 'Buscar en folio, persona o descripción',
     f_buscar_emp: 'Buscar por número o nombre',
     f_limpiar: 'Limpiar', f_exportar: 'Exportar a Excel',
-    f_estado: 'Estado', f_estado_veh: 'Deficiencias',
-    f_todos: 'Todos', f_todas: 'Todas',
+    f_estado: 'Estado', f_estado_veh: 'Deficiencias', f_mes: 'Mes',
+    f_todos: 'Todos', f_todas: 'Todas', f_quien: 'Quién',
+    cum_ya: 'Solo los que ya subieron', cum_no: 'Solo los que no han subido',
 
     v_con_def: 'Solo con deficiencias', v_sin_def: 'Solo sin deficiencias',
     v_si: 'Sí', v_no: 'No',
 
     mod_hse: 'Observaciones HSE', mod_vehicle: 'Inspecciones de Vehículo',
     mod_employees: 'Empleados', mod_compliance: 'Cumplimiento', mod_settings: 'Configuración',
-    e_activos: 'Activos', e_bajas: 'Dados de baja', e_bloqueados: 'Bloqueados', e_todos: 'Todos',
+    e_activos: 'Activos', e_bajas: 'Dados de baja', e_todos: 'Todos',
 
     t_folio: 'Folio', t_fecha: 'Fecha', t_persona: 'Persona', t_sitio: 'Sitio',
     t_clasificacion: 'Clasificación', t_peligro: 'Peligro', t_descripcion: 'Descripción',
@@ -395,11 +497,43 @@ const TEXTOS = {
     t_ubicacion: 'Ubicación', t_estado: 'Estado', t_ultimo_acceso: 'Último acceso',
     t_acciones: 'Acciones', t_pais: 'País', t_cliente: 'Cliente', t_hora: 'Hora',
     t_conductor: 'Conductor', t_acciones_tomadas: 'Acciones inmediatas',
+    t_coordinador: 'Coordinador', t_comentarios: 'Seg.',
+    t_hazards: 'Hazards', t_inspecciones: 'Inspecciones', t_total: 'Total',
+    t_ultimo_reporte: 'Último reporte', t_correo: 'Correo', t_idioma: 'Idioma',
+    t_renglon: 'Renglón', t_resultado: 'Resultado', t_mensaje: 'Mensaje',
 
-    e_activo: 'Activo', e_baja: 'De baja', e_bloqueado: 'Bloqueado',
-    acc_baja: 'Dar de baja', acc_reactivar: 'Reactivar', acc_desbloquear: 'Desbloquear',
+    e_activo: 'Activo', e_baja: 'De baja',
+    acc_baja: 'Dar de baja', acc_reactivar: 'Reactivar', acc_editar: 'Editar',
+
+    com_titulo: 'Seguimiento',
+    com_sin: 'Todavía no hay comentarios de seguimiento.',
+    com_poner: 'Escribe qué se hizo con este reporte…',
+    com_enviar: 'Agregar comentario',
+    com_vacio: 'El comentario no puede ir vacío.',
+
+    cum_personas: 'personas activas',
+    cum_subieron: 'ya subieron algo',
+    cum_sin: 'sin reportar',
+    cum_total: 'reportes en el mes',
+    cum_promedio: 'por persona que reportó',
+    cum_nadie: 'Nadie ha subido nada en este mes.',
+    cum_todos: 'Todos los activos subieron algo este mes.',
+    cum_lectura: '{subieron} de {total} personas reportaron este mes. ' +
+                 'Entre todas subieron {reportes} reportes, {promedio} de media por persona que participó. ' +
+                 'Quedan {sin} sin reportar.',
 
     emp_nueva: 'Dar de alta', emp_alta_titulo: 'Nuevo empleado',
+    emp_masiva: 'Alta masiva', emp_masiva_titulo: 'Dar de alta a varios de una vez',
+    emp_masiva_ayuda: 'Un renglón por persona: nombre, departamento y ubicación, ' +
+                      'separados por punto y coma. La ubicación puede ser el nombre del ' +
+                      'parque o la oficina; si la dejas vacía, pon US o CA en su lugar.',
+    emp_masiva_ej: 'Juan Perez; BLADE; Alta Farms\nMaria Lopez; SUPPORT; US',
+    emp_masiva_btn: 'Dar de alta a todos',
+    emp_masiva_res: '{altas} altas y {fallos} con problema.',
+    emp_editar_titulo: 'Editar empleado',
+    emp_guardar_cambios: 'Guardar cambios',
+    emp_editado: 'Cambios guardados para {nombre}.',
+    emp_correo: 'Correo (opcional)', emp_idioma: 'Idioma de la app',
     emp_nombre: 'Nombre completo', emp_departamento: 'Departamento',
     emp_ubicacion: 'Ubicación', emp_pais: 'País', emp_guardar: 'Dar de alta',
     emp_sin_ubicacion: 'Sin asignar',
@@ -416,7 +550,6 @@ const TEXTOS = {
     detalle_hse: 'Observación de HSE',
     detalle_veh: 'Inspección de vehículo',
     sin_fotos: 'Este reporte no trae fotos.',
-    fotos_caducan: 'Los enlaces de las fotos caducan en 5 minutos.',
     conf_baja: '¿Dar de baja a {nombre}? Su número queda apartado y no podrá entrar.',
     conf_reactivar: '¿Reactivar a {nombre}?',
     exportando: 'Exportando…',
@@ -443,21 +576,24 @@ const TEXTOS = {
     veh_titulo: 'Vehicle inspections',
     veh_sub: 'Only the countries and sites assigned to you are shown.',
     emp_titulo: 'Employees',
-    emp_sub: 'Create, deactivate and unlock. The 4-digit number is assigned by the system.',
+    emp_sub: 'Create, deactivate and edit. The 4-digit number is assigned by the system.',
+    cum_titulo: 'Compliance this month',
+    cum_sub: 'From the first to the last day of the month. Every active person is listed, including those who reported nothing.',
 
     f_desde: 'From', f_hasta: 'To', f_pais: 'Country', f_sitio: 'Site',
     f_clasificacion: 'Classification', f_buscar: 'Search number, person or description',
     f_buscar_emp: 'Search by number or name',
     f_limpiar: 'Clear', f_exportar: 'Export to Excel',
-    f_estado: 'Status', f_estado_veh: 'Deficiencies',
-    f_todos: 'All', f_todas: 'All',
+    f_estado: 'Status', f_estado_veh: 'Deficiencies', f_mes: 'Month',
+    f_todos: 'All', f_todas: 'All', f_quien: 'Who',
+    cum_ya: 'Only those who reported', cum_no: 'Only those who did not',
 
     v_con_def: 'With deficiencies only', v_sin_def: 'Without deficiencies only',
     v_si: 'Yes', v_no: 'No',
 
     mod_hse: 'HSE Observations', mod_vehicle: 'Vehicle Inspections',
     mod_employees: 'Employees', mod_compliance: 'Compliance', mod_settings: 'Settings',
-    e_activos: 'Active', e_bajas: 'Inactive', e_bloqueados: 'Locked', e_todos: 'All',
+    e_activos: 'Active', e_bajas: 'Inactive', e_todos: 'All',
 
     t_folio: 'Number', t_fecha: 'Date', t_persona: 'Person', t_sitio: 'Site',
     t_clasificacion: 'Classification', t_peligro: 'Hazard', t_descripcion: 'Description',
@@ -466,11 +602,43 @@ const TEXTOS = {
     t_ubicacion: 'Location', t_estado: 'Status', t_ultimo_acceso: 'Last sign-in',
     t_acciones: 'Actions', t_pais: 'Country', t_cliente: 'Customer', t_hora: 'Time',
     t_conductor: 'Driver', t_acciones_tomadas: 'Immediate actions',
+    t_coordinador: 'Coordinator', t_comentarios: 'Notes',
+    t_hazards: 'Hazards', t_inspecciones: 'Inspections', t_total: 'Total',
+    t_ultimo_reporte: 'Last report', t_correo: 'Email', t_idioma: 'Language',
+    t_renglon: 'Row', t_resultado: 'Result', t_mensaje: 'Message',
 
-    e_activo: 'Active', e_baja: 'Inactive', e_bloqueado: 'Locked',
-    acc_baja: 'Deactivate', acc_reactivar: 'Reactivate', acc_desbloquear: 'Unlock',
+    e_activo: 'Active', e_baja: 'Inactive',
+    acc_baja: 'Deactivate', acc_reactivar: 'Reactivate', acc_editar: 'Edit',
+
+    com_titulo: 'Follow-up',
+    com_sin: 'No follow-up notes yet.',
+    com_poner: 'Write what was done about this report…',
+    com_enviar: 'Add note',
+    com_vacio: 'The note cannot be empty.',
+
+    cum_personas: 'active people',
+    cum_subieron: 'reported something',
+    cum_sin: 'did not report',
+    cum_total: 'reports this month',
+    cum_promedio: 'per person who reported',
+    cum_nadie: 'Nobody reported anything this month.',
+    cum_todos: 'Every active person reported something this month.',
+    cum_lectura: '{subieron} of {total} people reported this month. ' +
+                 'Together they filed {reportes} reports, {promedio} on average per person who took part. ' +
+                 '{sin} have not reported.',
 
     emp_nueva: 'New employee', emp_alta_titulo: 'New employee',
+    emp_masiva: 'Bulk create', emp_masiva_titulo: 'Create several at once',
+    emp_masiva_ayuda: 'One row per person: name, department and location, ' +
+                      'separated by semicolons. The location can be the park or office name; ' +
+                      'if you leave it empty, put US or CA instead.',
+    emp_masiva_ej: 'Juan Perez; BLADE; Alta Farms\nMaria Lopez; SUPPORT; US',
+    emp_masiva_btn: 'Create all',
+    emp_masiva_res: '{altas} created, {fallos} with problems.',
+    emp_editar_titulo: 'Edit employee',
+    emp_guardar_cambios: 'Save changes',
+    emp_editado: 'Changes saved for {nombre}.',
+    emp_correo: 'Email (optional)', emp_idioma: 'App language',
     emp_nombre: 'Full name', emp_departamento: 'Department',
     emp_ubicacion: 'Location', emp_pais: 'Country', emp_guardar: 'Create',
     emp_sin_ubicacion: 'Not assigned',
@@ -487,7 +655,6 @@ const TEXTOS = {
     detalle_hse: 'HSE observation',
     detalle_veh: 'Vehicle inspection',
     sin_fotos: 'This report has no photos.',
-    fotos_caducan: 'Photo links expire in 5 minutes.',
     conf_baja: 'Deactivate {nombre}? Their number is retired and they will not be able to sign in.',
     conf_reactivar: 'Reactivate {nombre}?',
     exportando: 'Exporting…',
@@ -510,7 +677,8 @@ let VISTA = null;
 let HSE = [];          // todas las filas que el servidor dejó ver
 let VEH = [];
 let EMP = [];
-let CATALOGOS = null;  // ubicaciones, departamentos, países
+let CUM = [];          // cumplimiento del mes que se está viendo
+let CATALOGOS = null;  // ubicaciones, departamentos, países, clasificaciones
 
 function texto(v) { return (v === null || v === undefined) ? '' : String(v); }
 
@@ -724,14 +892,25 @@ async function cargarTodo() {
       const c = await api('ubicaciones', {});
       if (c.ok) CATALOGOS = c;
     }
+
+    // Una primera pasada en cuanto llega el catálogo: país, sitio y
+    // clasificación no dependen de los reportes, así que no tienen por qué
+    // esperar a que bajen. Pedir las listas tarda, y durante ese rato los
+    // desplegables salían vacíos.
     prepararFiltros();
 
     if (puede('hse'))       { const r = await api('hse-lista', {});      if (r.ok) HSE = r.filas; }
     if (puede('vehicle'))   { const r = await api('vehiculo-lista', {}); if (r.ok) VEH = r.filas; }
     if (puede('employees')) await cargarEmpleados();
 
+    // Y una segunda al final, por si en los datos apareciera alguna
+    // clasificación que no esté en el catálogo. Llamarla dos veces no
+    // molesta: conserva lo que ya estuviera elegido.
+    prepararFiltros();
+
     pintarHse();
     pintarVeh();
+    if (puede('compliance')) await cargarCumplimiento();
   } catch (e) { /* la sesión caducada ya se gestionó en api() */ }
 }
 
@@ -768,12 +947,40 @@ function prepararFiltros() {
   llenar('h-sitio', comoSitio, t('f_todos'));
   llenar('v-sitio', comoSitio, t('f_todos'));
 
-  // Las clasificaciones salen de los propios datos: así siempre coinciden con
-  // lo que hay en la tabla, aunque mañana se añada una nueva en la base.
+  // Las clasificaciones salen del catálogo del servidor, no de los reportes
+  // que ya existen: así el desplegable está completo desde el primer día,
+  // cuando todavía no hay nada cargado.
+  //
+  // A lo que manda el catálogo se le suma cualquier clasificación que
+  // aparezca en los datos y no esté en él, para que nunca haya una fila que
+  // no se pueda filtrar.
   const clases = [];
-  HSE.forEach((f) => { if (f.classification && clases.indexOf(f.classification) === -1) clases.push(f.classification); });
+  ((CATALOGOS && CATALOGOS.clasificaciones) || []).forEach((c) => {
+    if (c.label && clases.indexOf(c.label) === -1) clases.push(c.label);
+  });
+  HSE.forEach((f) => {
+    if (f.classification && clases.indexOf(f.classification) === -1) clases.push(f.classification);
+  });
   clases.sort();
   llenar('h-clasif', clases.map((c) => ({ valor: c, etiqueta: c })), t('f_todas'));
+
+  // Cumplimiento
+  llenar('c-pais', paises.map((p) => ({
+    valor: p.code, etiqueta: (IDIOMA === 'es' ? p.name_es : p.name_en),
+  })), t('f_todos'));
+
+  const selQ = document.getElementById('c-quien');
+  if (selQ) {
+    const antes = selQ.value;
+    selQ.innerHTML = '';
+    selQ.appendChild(opcion('', t('f_todos')));
+    selQ.appendChild(opcion('si', t('cum_ya')));
+    selQ.appendChild(opcion('no', t('cum_no')));
+    selQ.value = antes;
+  }
+
+  const mes = document.getElementById('c-mes');
+  if (mes && !mes.value) mes.value = new Date().toISOString().slice(0, 7);
 
   const selDef = document.getElementById('v-def');
   if (selDef && selDef.options.length === 0) {
@@ -786,8 +993,9 @@ function prepararFiltros() {
   if (selEstado) {
     const antes = selEstado.value || 'activos';
     selEstado.innerHTML = '';
-    [['activos', t('e_activos')], ['bajas', t('e_bajas')],
-     ['bloqueados', t('e_bloqueados')], ['todos', t('e_todos')]]
+    // Ya no hay estado "bloqueados": con la identificación por código no hay
+    // intentos fallidos que contar, así que ese filtro siempre saldría vacío.
+    [['activos', t('e_activos')], ['bajas', t('e_bajas')], ['todos', t('e_todos')]]
       .forEach((p) => selEstado.appendChild(opcion(p[0], p[1])));
     selEstado.value = antes;
   }
@@ -820,7 +1028,40 @@ function prepararFiltros() {
       opcion(p.code, IDIOMA === 'es' ? p.name_es : p.name_en)));
     selP.value = antes;
   }
+  // Los mismos desplegables para el formulario de edición.
+  const selXD = document.getElementById('x-depto');
+  if (selXD) {
+    const antes = selXD.value;
+    selXD.innerHTML = '';
+    deptos.forEach((d) => selXD.appendChild(opcion(d.code, d.label)));
+    selXD.value = antes;
+  }
+  const selXU = document.getElementById('x-ubic');
+  if (selXU) {
+    const antes = selXU.value;
+    selXU.innerHTML = '';
+    selXU.appendChild(opcion('', t('emp_sin_ubicacion')));
+    ubic.forEach((u) => selXU.appendChild(
+      opcion(u.id, u.name + (u.kind === 'office' ? ' ·' : ''))));
+    selXU.value = antes;
+  }
+  const selXP = document.getElementById('x-pais');
+  if (selXP) {
+    const antes = selXP.value;
+    selXP.innerHTML = '';
+    selXP.appendChild(opcion('', '—'));
+    paises.forEach((p) => selXP.appendChild(
+      opcion(p.code, IDIOMA === 'es' ? p.name_es : p.name_en)));
+    selXP.value = antes;
+  }
+  const selXI = document.getElementById('x-idioma');
+  if (selXI && selXI.options.length === 0) {
+    selXI.appendChild(opcion('es', 'Español'));
+    selXI.appendChild(opcion('en', 'English'));
+  }
+
   alCambiarUbicacion();
+  alCambiarUbicacionEdicion();
 }
 
 
@@ -864,6 +1105,23 @@ function celda(texto_, clase) {
   return td;
 }
 
+// La columna de seguimiento enseña cuántos comentarios hay y, al pasar el
+// ratón, el último. Si no hay ninguno se deja un guion y no un cero, para que
+// un reporte sin seguimiento se note de un vistazo.
+function celdaSeguimiento(f) {
+  const td = document.createElement('td');
+  const n = f.comentarios || 0;
+  if (n === 0) { td.textContent = '—'; return td; }
+  const et = document.createElement('span');
+  et.className = 'etiqueta et-gris';
+  et.textContent = n;
+  if (f.ultimo_comentario) {
+    et.title = texto(f.ultimo_comentario_por) + ': ' + texto(f.ultimo_comentario);
+  }
+  td.appendChild(et);
+  return td;
+}
+
 function pintarHse() {
   const filas = filtradasHse();
   const tabla = document.getElementById('h-tabla');
@@ -877,15 +1135,16 @@ function pintarHse() {
     const d = document.createElement('tbody');
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.className = 'vacio'; td.colSpan = 8; td.textContent = t('sin_datos');
+    td.className = 'vacio'; td.colSpan = 10; td.textContent = t('sin_datos');
     tr.appendChild(td); d.appendChild(tr); tabla.appendChild(d);
     return;
   }
 
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
-  [t('t_folio'), t('t_fecha'), t('t_persona'), t('t_sitio'), t('t_clasificacion'),
-   t('t_peligro'), t('t_descripcion'), t('t_fotos')].forEach((h) => {
+  [t('t_folio'), t('t_fecha'), t('t_persona'), t('t_coordinador'), t('t_sitio'),
+   t('t_clasificacion'), t('t_peligro'), t('t_descripcion'), t('t_fotos'),
+   t('t_comentarios')].forEach((h) => {
     const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
   });
   thead.appendChild(trh); tabla.appendChild(thead);
@@ -898,11 +1157,13 @@ function pintarHse() {
     tr.appendChild(celda(f.report_code, 'folio-cel'));
     tr.appendChild(celda(f.occurred_date));
     tr.appendChild(celda(f.reporter_name));
+    tr.appendChild(celda(f.coordinador));
     tr.appendChild(celda(f.site));
     tr.appendChild(celda(f.classification));
     tr.appendChild(celda(f.hazard_item || f.hazard_category));
     tr.appendChild(celda(f.description, 'recorte'));
     tr.appendChild(celda(f.archivos || 0));
+    tr.appendChild(celdaSeguimiento(f));
     tb.appendChild(tr);
   });
   tabla.appendChild(tb);
@@ -954,15 +1215,16 @@ function pintarVeh() {
     const d = document.createElement('tbody');
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.className = 'vacio'; td.colSpan = 8; td.textContent = t('sin_datos');
+    td.className = 'vacio'; td.colSpan = 10; td.textContent = t('sin_datos');
     tr.appendChild(td); d.appendChild(tr); tabla.appendChild(d);
     return;
   }
 
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
-  [t('t_folio'), t('t_fecha'), t('t_conductor'), t('t_placa'), t('t_sitio'),
-   t('t_odometro'), t('t_deficiencias'), t('t_fotos')].forEach((h) => {
+  [t('t_folio'), t('t_fecha'), t('t_conductor'), t('t_coordinador'), t('t_placa'),
+   t('t_sitio'), t('t_odometro'), t('t_deficiencias'), t('t_fotos'),
+   t('t_comentarios')].forEach((h) => {
     const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
   });
   thead.appendChild(trh); tabla.appendChild(thead);
@@ -975,6 +1237,7 @@ function pintarVeh() {
     tr.appendChild(celda(f.report_code, 'folio-cel'));
     tr.appendChild(celda(f.inspection_date));
     tr.appendChild(celda(f.driver_name));
+    tr.appendChild(celda(f.coordinador));
     tr.appendChild(celda(f.license_plate));
     tr.appendChild(celda(f.site));
     tr.appendChild(celda(f.odometer));
@@ -987,6 +1250,7 @@ function pintarVeh() {
     tr.appendChild(td);
 
     tr.appendChild(celda(f.fotos || 0));
+    tr.appendChild(celdaSeguimiento(f));
     tb.appendChild(tr);
   });
   tabla.appendChild(tb);
@@ -1031,6 +1295,7 @@ async function abrirDetalleHse(f) {
    [t('t_pais'), f.country],
    [t('t_sitio'), f.site],
    [t('t_cliente'), f.customer],
+   [t('t_coordinador'), f.coordinador],
    [t('t_clasificacion'), f.classification],
    [t('t_peligro'), texto(f.hazard_category) + (f.hazard_item ? ' → ' + f.hazard_item : '')],
    [t('t_acciones_tomadas'), f.actions],
@@ -1038,6 +1303,7 @@ async function abrirDetalleHse(f) {
   ].forEach((p) => c.appendChild(dato(p[0], p[1])));
 
   await pintarFotos(c, f.report_code);
+  await pintarSeguimiento(c, f.report_code);
 }
 
 async function abrirDetalleVeh(f) {
@@ -1049,6 +1315,7 @@ async function abrirDetalleVeh(f) {
    [t('t_conductor'), f.driver_name],
    [t('t_placa'), f.license_plate],
    [t('t_odometro'), f.odometer],
+   [t('t_coordinador'), f.coordinador],
    [t('t_pais'), f.country],
    [t('t_sitio'), f.site],
    [t('t_deficiencias'), f.deficiencies],
@@ -1081,6 +1348,7 @@ async function abrirDetalleVeh(f) {
   } catch (e) { /* ya gestionado */ }
 
   await pintarFotos(c, f.report_code);
+  await pintarSeguimiento(c, f.report_code);
 }
 
 async function pintarFotos(cont, folio) {
@@ -1124,13 +1392,133 @@ async function pintarFotos(cont, folio) {
       g.appendChild(enlace);
     });
     cont.appendChild(g);
-
-    const nota = document.createElement('div');
-    nota.className = 'cuenta';
-    nota.textContent = t('fotos_caducan');
-    cont.appendChild(nota);
   } catch (e) {
     espera.remove();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 10b · SEGUIMIENTO
+//
+// El hilo de comentarios de un reporte. No se edita ni se borra nada: lo que
+// se escribió queda, con quién lo escribió y cuándo. Para un incidente eso es
+// justamente el valor, poder ver después qué se fue haciendo.
+// ══════════════════════════════════════════════════════════════════════════
+
+function cuando(iso) {
+  if (!iso) return '';
+  const s_ = texto(iso).replace('T', ' ');
+  return s_.slice(0, 16);
+}
+
+async function pintarSeguimiento(cont, folio) {
+  const h = document.createElement('h2');
+  h.textContent = t('com_titulo');
+  cont.appendChild(h);
+
+  const lista = document.createElement('div');
+  lista.id = 'com-lista';
+  lista.innerHTML = '<div class="cargando">' + t('cargando') + '</div>';
+  cont.appendChild(lista);
+
+  const caja = document.createElement('div');
+  caja.className = 'nuevo-com';
+  caja.style.marginTop = '12px';
+
+  const ta = document.createElement('textarea');
+  ta.id = 'com-texto';
+  ta.rows = 3;
+  ta.placeholder = t('com_poner');
+  ta.maxLength = 2000;
+
+  const err = document.createElement('div');
+  err.className = 'error';
+  err.id = 'com-error';
+
+  const b = document.createElement('button');
+  b.className = 'btn';
+  b.style.marginTop = '10px';
+  b.id = 'com-btn';
+  b.textContent = t('com_enviar');
+  b.onclick = () => mandarComentario(folio);
+
+  caja.appendChild(ta);
+  caja.appendChild(err);
+  caja.appendChild(b);
+  cont.appendChild(caja);
+
+  await cargarComentarios(folio);
+}
+
+async function cargarComentarios(folio) {
+  const lista = document.getElementById('com-lista');
+  if (!lista) return;
+  try {
+    const r = await api('comentarios', { report_code: folio });
+    lista.innerHTML = '';
+
+    if (!r.ok || !r.comentarios || r.comentarios.length === 0) {
+      const v = document.createElement('div');
+      v.className = 'vacio';
+      v.textContent = t('com_sin');
+      lista.appendChild(v);
+      return;
+    }
+
+    r.comentarios.forEach((c) => {
+      const d = document.createElement('div');
+      d.className = 'comentario';
+      const q = document.createElement('div');
+      q.className = 'quien';
+      q.textContent = texto(c.author_name);
+      const w = document.createElement('span');
+      w.className = 'cuando';
+      w.textContent = '  ·  ' + cuando(c.created_at);
+      q.appendChild(w);
+      const b = document.createElement('div');
+      b.className = 'cuerpo';
+      b.textContent = texto(c.body);
+      d.appendChild(q); d.appendChild(b);
+      lista.appendChild(d);
+    });
+  } catch (e) {
+    lista.innerHTML = '';
+  }
+}
+
+async function mandarComentario(folio) {
+  const ta = document.getElementById('com-texto');
+  const err = document.getElementById('com-error');
+  const b = document.getElementById('com-btn');
+  if (!ta || !b) return;
+
+  err.classList.remove('visible');
+  const txt = (ta.value || '').trim();
+  if (!txt) { err.textContent = t('com_vacio'); err.classList.add('visible'); return; }
+
+  b.disabled = true;
+  try {
+    const r = await api('comentario-nuevo', { report_code: folio, body: txt });
+    if (!r.ok) { err.textContent = detalleServidor(r); err.classList.add('visible'); return; }
+
+    ta.value = '';
+    await cargarComentarios(folio);
+
+    // La tabla de atrás tiene que reflejar el comentario nuevo sin obligar a
+    // recargar la página entera.
+    const dest = folio.indexOf('-VEH-') !== -1 ? VEH : HSE;
+    const fila = dest.find((x) => x.report_code === folio);
+    if (fila) {
+      fila.comentarios = (fila.comentarios || 0) + 1;
+      fila.ultimo_comentario = txt;
+      fila.ultimo_comentario_por = (USUARIO && USUARIO.full_name) || '';
+      pintarHse(); pintarVeh();
+    }
+  } catch (e) {
+    if (e.message !== 'sesion') { err.textContent = e.message || ''; err.classList.add('visible'); }
+  } finally {
+    b.disabled = false;
   }
 }
 
@@ -1191,9 +1579,10 @@ function pintarEmpleados() {
 
     const td = document.createElement('td');
     const et = document.createElement('span');
-    if (!e.activo)        { et.className = 'etiqueta et-gris';  et.textContent = t('e_baja'); }
-    else if (e.bloqueado) { et.className = 'etiqueta et-aviso'; et.textContent = t('e_bloqueado'); }
-    else                  { et.className = 'etiqueta et-ok';    et.textContent = t('e_activo'); }
+    // Solo quedan dos estados. El bloqueo por intentos desapareció con la
+    // identificación por código: ya no hay respuesta equivocada que contar.
+    if (!e.activo) { et.className = 'etiqueta et-gris'; et.textContent = t('e_baja'); }
+    else           { et.className = 'etiqueta et-ok';   et.textContent = t('e_activo'); }
     td.appendChild(et);
     tr.appendChild(td);
 
@@ -1203,17 +1592,15 @@ function pintarEmpleados() {
       const tdA = document.createElement('td');
       tdA.style.whiteSpace = 'nowrap';
 
-      if (e.bloqueado) {
-        const b = document.createElement('button');
-        b.className = 'btn chico secundario';
-        b.textContent = t('acc_desbloquear');
-        b.onclick = () => desbloquear(e);
-        tdA.appendChild(b);
-      }
+      const b1 = document.createElement('button');
+      b1.className = 'btn chico secundario';
+      b1.textContent = t('acc_editar');
+      b1.onclick = () => abrirEdicion(e);
+      tdA.appendChild(b1);
 
       const b2 = document.createElement('button');
       b2.className = 'btn chico ' + (e.activo ? 'peligro' : '');
-      b2.style.marginLeft = e.bloqueado ? '6px' : '0';
+      b2.style.marginLeft = '6px';
       b2.textContent = e.activo ? t('acc_baja') : t('acc_reactivar');
       b2.onclick = () => cambiarActivo(e);
       tdA.appendChild(b2);
@@ -1233,13 +1620,6 @@ function avisarEmpleados(texto_) {
   setTimeout(() => c.classList.remove('visible'), 8000);
 }
 
-async function desbloquear(e) {
-  try {
-    const r = await api('empleado-desbloquear', { employee_no: e.employee_no });
-    if (r.ok) { avisarEmpleados(e.full_name + ' · ' + t('acc_desbloquear')); await cargarEmpleados(); }
-  } catch (err) { /* ya gestionado */ }
-}
-
 async function cambiarActivo(e) {
   const pregunta = e.activo
     ? t('conf_baja').replace('{nombre}', e.full_name)
@@ -1253,6 +1633,7 @@ async function cambiarActivo(e) {
 }
 
 function abrirAlta() {
+  cerrarEdicion(); cerrarMasiva();
   document.getElementById('e-alta').classList.add('abierta');
   document.getElementById('e-nombre').value = '';
   document.getElementById('e-error').classList.remove('visible');
@@ -1261,6 +1642,194 @@ function abrirAlta() {
 
 function cerrarAlta() {
   document.getElementById('e-alta').classList.remove('abierta');
+}
+
+
+// ── Editar ────────────────────────────────────────────────────────────────
+//
+// El número de empleado no se puede cambiar: es con lo que entra a la app y
+// con lo que están firmados todos sus reportes. Lo demás sí.
+
+let EDITANDO = null;
+
+function abrirEdicion(e) {
+  cerrarAlta(); cerrarMasiva();
+  EDITANDO = e;
+  document.getElementById('x-numero').value = e.employee_no;
+  document.getElementById('x-nombre').value = texto(e.full_name);
+  document.getElementById('x-depto').value  = texto(e.department_code);
+  document.getElementById('x-ubic').value   = texto(e.site_id);
+  document.getElementById('x-pais').value   = texto(e.country_code);
+  document.getElementById('x-correo').value = texto(e.email);
+  document.getElementById('x-idioma').value = texto(e.lang) || 'en';
+  document.getElementById('x-error').classList.remove('visible');
+  alCambiarUbicacionEdicion();
+  document.getElementById('e-editar').classList.add('abierta');
+  document.getElementById('x-nombre').focus();
+}
+
+function cerrarEdicion() {
+  const c = document.getElementById('e-editar');
+  if (c) c.classList.remove('abierta');
+  EDITANDO = null;
+}
+
+function alCambiarUbicacionEdicion() {
+  const caja = document.getElementById('x-pais-caja');
+  if (!caja) return;
+  caja.style.display = valor('x-ubic') ? 'none' : '';
+}
+
+async function guardarEdicion() {
+  if (!EDITANDO) return;
+  const err = document.getElementById('x-error');
+  err.classList.remove('visible');
+
+  const nombre = (document.getElementById('x-nombre').value || '').trim();
+  const depto  = valor('x-depto');
+  const ubic   = valor('x-ubic');
+  const pais   = valor('x-pais');
+  const correo = (document.getElementById('x-correo').value || '').trim();
+  const idioma = valor('x-idioma');
+
+  const fallar = (clave) => { err.textContent = t(clave); err.classList.add('visible'); };
+  if (nombre.length < 3) return fallar('emp_err_nombre');
+  if (!depto) return fallar('emp_err_depto');
+  if (!ubic && !pais) return fallar('emp_err_pais');
+
+  const boton = document.getElementById('x-guardar');
+  boton.disabled = true;
+
+  // Se mandan siempre todos los campos: el formulario los enseña todos, así
+  // que lo que se ve en pantalla es lo que queda guardado. El correo vacío
+  // viaja como cadena vacía, que para el servidor quiere decir "bórralo".
+  const quien = EDITANDO.full_name;
+  const cuerpo = {
+    employee_no: EDITANDO.employee_no,
+    full_name: nombre,
+    department_code: depto,
+    email: correo,
+    emp_lang: idioma,
+  };
+  if (ubic) { cuerpo.site_id = ubic; }
+  else      { cuerpo.quitar_sitio = true; cuerpo.country_code = pais; }
+
+  try {
+    const r = await api('empleado-editar', cuerpo);
+    if (!r.ok) { err.textContent = detalleServidor(r); err.classList.add('visible'); return; }
+    avisarEmpleados(t('emp_editado').replace('{nombre}', quien));
+    cerrarEdicion();
+    await cargarEmpleados();
+  } catch (e) {
+    if (e.message !== 'sesion') { err.textContent = e.message || ''; err.classList.add('visible'); }
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+
+// ── Alta masiva ───────────────────────────────────────────────────────────
+//
+// Se pega un bloque de texto, un renglón por persona. Cada renglón va por
+// separado al servidor, así que uno con una errata no tumba a los demás: se
+// dan de alta los buenos y se enseña exactamente cuál falló y por qué.
+
+function abrirMasiva() {
+  cerrarAlta(); cerrarEdicion();
+  const c = document.getElementById('e-masiva');
+  document.getElementById('m-texto').value = '';
+  document.getElementById('m-texto').placeholder = t('emp_masiva_ej');
+  document.getElementById('m-error').classList.remove('visible');
+  document.getElementById('m-resultado').innerHTML = '';
+  c.classList.add('abierta');
+  document.getElementById('m-texto').focus();
+}
+
+function cerrarMasiva() {
+  const c = document.getElementById('e-masiva');
+  if (c) c.classList.remove('abierta');
+}
+
+// Acepta punto y coma, tabulador o coma como separador, porque según de dónde
+// se pegue viene de una forma o de otra.
+function renglonesMasiva(texto_) {
+  return (texto_ || '').split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l !== '')
+    .map((l) => {
+      const partes = l.split(/[;\t]|,(?=\s)/).map((x) => x.trim());
+      const fila = {
+        nombre: partes[0] || '',
+        departamento: (partes[1] || '').toUpperCase(),
+      };
+      const ubic = partes[2] || '';
+      // Si la tercera columna son dos letras, es el país; si no, la ubicación.
+      if (/^(US|CA)$/i.test(ubic)) fila.pais = ubic.toUpperCase();
+      else if (ubic) fila.sitio = ubic;
+      if (partes[3]) fila.correo = partes[3];
+      return fila;
+    });
+}
+
+async function darDeAltaMasiva() {
+  const err = document.getElementById('m-error');
+  const res = document.getElementById('m-resultado');
+  err.classList.remove('visible');
+  res.innerHTML = '';
+
+  const filas = renglonesMasiva(document.getElementById('m-texto').value);
+  if (filas.length === 0) { err.textContent = t('emp_err_nombre'); err.classList.add('visible'); return; }
+
+  const boton = document.getElementById('m-guardar');
+  boton.disabled = true;
+
+  try {
+    const r = await api('empleado-alta-masiva', { filas: filas });
+    if (!r.ok) { err.textContent = detalleServidor(r); err.classList.add('visible'); return; }
+
+    const resumen = document.createElement('div');
+    resumen.className = 'cuenta';
+    resumen.textContent = t('emp_masiva_res')
+      .replace('{altas}', r.altas).replace('{fallos}', r.fallos);
+    res.appendChild(resumen);
+
+    const caja = document.createElement('div');
+    caja.className = 'caja-tabla';
+    const tabla = document.createElement('table');
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    [t('t_renglon'), t('t_nombre'), t('t_numero'), t('t_mensaje')].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
+    });
+    thead.appendChild(trh); tabla.appendChild(thead);
+
+    const tb = document.createElement('tbody');
+    (r.resultados || []).forEach((x) => {
+      const tr = document.createElement('tr');
+      tr.appendChild(celda(x.renglon));
+      tr.appendChild(celda(x.nombre));
+      tr.appendChild(celda(x.employee_no || '—', 'folio-cel'));
+      const td = document.createElement('td');
+      const et = document.createElement('span');
+      et.className = 'etiqueta ' + (x.ok ? 'et-ok' : 'et-mal');
+      et.textContent = x.mensaje;
+      td.appendChild(et);
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+    tabla.appendChild(tb);
+    caja.appendChild(tabla);
+    res.appendChild(caja);
+
+    if (r.altas > 0) {
+      document.getElementById('e-estado').value = 'activos';
+      await cargarEmpleados();
+    }
+  } catch (e) {
+    if (e.message !== 'sesion') { err.textContent = e.message || ''; err.classList.add('visible'); }
+  } finally {
+    boton.disabled = false;
+  }
 }
 
 // El país solo se pregunta cuando no hay ubicación: si la hay, el país es el
@@ -1315,6 +1884,134 @@ async function darDeAlta() {
 
 
 // ══════════════════════════════════════════════════════════════════════════
+// 11b · CUMPLIMIENTO
+//
+// Una tabla sola no dice si el mes va bien o mal, así que arriba van cuatro
+// números y una frase que los lee. Sin meta ni semáforo: Evelyn pidió el
+// conteo a secas, y poner un objetivo inventado sería decirle a la gente que
+// cumple o no cumple contra algo que nadie acordó.
+// ══════════════════════════════════════════════════════════════════════════
+
+async function cargarCumplimiento() {
+  const mes = valor('c-mes');
+  try {
+    const r = await api('cumplimiento', {
+      // El input de tipo month da 'AAAA-MM'; el servidor espera una fecha.
+      mes: mes ? mes + '-01' : '',
+      pais: valor('c-pais'),
+    });
+    if (r.ok) CUM = r.filas;
+    pintarCumplimiento();
+  } catch (e) { /* ya gestionado */ }
+}
+
+function filtradasCum() {
+  const quien = valor('c-quien');
+  const busca = valor('c-busca').trim().toLowerCase();
+  return CUM.filter((f) => {
+    if (quien === 'si' && !(f.total > 0)) return false;
+    if (quien === 'no' && f.total > 0) return false;
+    if (busca) {
+      const todo = (texto(f.employee_no) + ' ' + texto(f.full_name) + ' ' + texto(f.site)).toLowerCase();
+      if (todo.indexOf(busca) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function metrica(num, etiqueta, clase) {
+  const d = document.createElement('div');
+  d.className = 'metrica' + (clase ? ' ' + clase : '');
+  const n = document.createElement('div'); n.className = 'num'; n.textContent = num;
+  const e = document.createElement('div'); e.className = 'etq'; e.textContent = etiqueta;
+  d.appendChild(n); d.appendChild(e);
+  return d;
+}
+
+// Los números se calculan sobre TODO el mes, no sobre lo que queda filtrado:
+// si alguien filtra "solo los que no han subido", el porcentaje de
+// participación tiene que seguir siendo el del mes entero.
+function pintarCumplimiento() {
+  const cajaM = document.getElementById('c-metricas');
+  const lectura = document.getElementById('c-lectura');
+  const tabla = document.getElementById('c-tabla');
+  if (!tabla) return;
+
+  const total     = CUM.length;
+  const subieron  = CUM.filter((f) => f.total > 0).length;
+  const sin       = total - subieron;
+  const reportes  = CUM.reduce((a, f) => a + (f.total || 0), 0);
+  const promedio  = subieron > 0 ? (reportes / subieron) : 0;
+
+  cajaM.innerHTML = '';
+  cajaM.appendChild(metrica(total, t('cum_personas')));
+  cajaM.appendChild(metrica(subieron, t('cum_subieron'), subieron === total && total > 0 ? 'bien' : ''));
+  cajaM.appendChild(metrica(sin, t('cum_sin'), sin > 0 ? 'aviso' : 'bien'));
+  cajaM.appendChild(metrica(reportes, t('cum_total')));
+
+  if (total === 0) {
+    lectura.textContent = t('sin_datos');
+  } else if (reportes === 0) {
+    lectura.textContent = t('cum_nadie');
+  } else if (sin === 0) {
+    lectura.textContent = t('cum_todos') + ' ' + t('cum_lectura')
+      .replace('{subieron}', subieron).replace('{total}', total)
+      .replace('{reportes}', reportes).replace('{promedio}', promedio.toFixed(1))
+      .replace('{sin}', sin);
+  } else {
+    lectura.textContent = t('cum_lectura')
+      .replace('{subieron}', subieron).replace('{total}', total)
+      .replace('{reportes}', reportes).replace('{promedio}', promedio.toFixed(1))
+      .replace('{sin}', sin);
+  }
+
+  const filas = filtradasCum();
+  document.getElementById('c-cuenta').textContent =
+    t('n_empleados').replace('{n}', filas.length).replace('{total}', total);
+
+  tabla.innerHTML = '';
+  if (filas.length === 0) {
+    const d = document.createElement('tbody');
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'vacio'; td.colSpan = 8; td.textContent = t('sin_datos');
+    tr.appendChild(td); d.appendChild(tr); tabla.appendChild(d);
+    return;
+  }
+
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  [t('t_numero'), t('t_nombre'), t('t_departamento'), t('t_ubicacion'), t('t_pais'),
+   t('t_hazards'), t('t_inspecciones'), t('t_ultimo_reporte')].forEach((h) => {
+    const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
+  });
+  thead.appendChild(trh); tabla.appendChild(thead);
+
+  const tb = document.createElement('tbody');
+  filas.forEach((f) => {
+    const tr = document.createElement('tr');
+    tr.appendChild(celda(f.employee_no, 'folio-cel'));
+    tr.appendChild(celda(f.full_name));
+    tr.appendChild(celda(f.department));
+    tr.appendChild(celda(f.site));
+    tr.appendChild(celda(f.country_code));
+
+    const tdH = document.createElement('td');
+    const et = document.createElement('span');
+    et.className = 'etiqueta ' + (f.hazards > 0 ? 'et-ok' : 'et-gris');
+    et.textContent = f.hazards;
+    tdH.appendChild(et);
+    tr.appendChild(tdH);
+
+    tr.appendChild(celda(f.inspecciones));
+    tr.appendChild(celda(f.ultimo_reporte || '—'));
+    tb.appendChild(tr);
+  });
+  tabla.appendChild(tb);
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
 // 12 · EXPORTAR
 //
 // Se exporta lo que se está viendo, con los filtros puestos, no la tabla
@@ -1333,6 +2030,7 @@ function datosParaExportar(que) {
       o[t('t_fecha')] = f.occurred_date;
       o[t('t_hora')] = f.occurred_time;
       o[t('t_persona')] = f.reporter_name;
+      o[t('t_coordinador')] = f.coordinador;
       o[t('t_departamento')] = f.department;
       o[t('t_pais')] = f.country;
       o[t('t_sitio')] = f.site;
@@ -1342,6 +2040,8 @@ function datosParaExportar(que) {
       o[t('t_acciones_tomadas')] = f.actions;
       o[t('t_descripcion')] = f.description;
       o[t('t_fotos')] = f.archivos;
+      o[t('t_comentarios')] = f.comentarios || 0;
+      o[t('com_titulo')] = f.ultimo_comentario;
       return o;
     });
   }
@@ -1351,12 +2051,30 @@ function datosParaExportar(que) {
       o[t('t_folio')] = f.report_code;
       o[t('t_fecha')] = f.inspection_date;
       o[t('t_conductor')] = f.driver_name;
+      o[t('t_coordinador')] = f.coordinador;
       o[t('t_placa')] = f.license_plate;
       o[t('t_odometro')] = f.odometer;
       o[t('t_pais')] = f.country;
       o[t('t_sitio')] = f.site;
       o[t('t_deficiencias')] = f.deficiencies;
       o[t('t_fotos')] = f.fotos;
+      o[t('t_comentarios')] = f.comentarios || 0;
+      o[t('com_titulo')] = f.ultimo_comentario;
+      return o;
+    });
+  }
+  if (que === 'compliance') {
+    return filtradasCum().map((f) => {
+      const o = {};
+      o[t('t_numero')] = f.employee_no;
+      o[t('t_nombre')] = f.full_name;
+      o[t('t_departamento')] = f.department;
+      o[t('t_ubicacion')] = f.site;
+      o[t('t_pais')] = f.country_code;
+      o[t('t_hazards')] = f.hazards;
+      o[t('t_inspecciones')] = f.inspecciones;
+      o[t('t_total')] = f.total;
+      o[t('t_ultimo_reporte')] = f.ultimo_reporte;
       return o;
     });
   }
@@ -1370,7 +2088,7 @@ function datosParaExportar(que) {
       o[t('t_departamento')] = e.department;
       o[t('t_ubicacion')] = e.site;
       o[t('t_pais')] = e.country_code;
-      o[t('t_estado')] = !e.activo ? t('e_baja') : (e.bloqueado ? t('e_bloqueado') : t('e_activo'));
+      o[t('t_estado')] = e.activo ? t('e_activo') : t('e_baja');
       o[t('t_ultimo_acceso')] = e.ultimo_acceso;
       return o;
     });
@@ -1378,7 +2096,9 @@ function datosParaExportar(que) {
 
 function nombreArchivo(que) {
   const hoy = new Date().toISOString().slice(0, 10);
-  const parte = que === 'hse' ? 'HSE' : (que === 'vehicle' ? 'Vehiculos' : 'Empleados');
+  const nombres = { hse: 'HSE', vehicle: 'Vehiculos', compliance: 'Cumplimiento' };
+  const parte = nombres[que] || 'Empleados';
+  if (que === 'compliance') return 'SPIE-NA-Cumplimiento-' + (valor('c-mes') || hoy.slice(0, 7));
   return 'SPIE-NA-' + parte + '-' + hoy;
 }
 
