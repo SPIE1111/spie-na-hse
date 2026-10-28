@@ -1043,6 +1043,20 @@ async function prepararCoordinadores() {
   const sel = document.getElementById('a-coord');
   if (!caja || !sel) return;
 
+  // Si el empleado ya trae coordinador asignado —la gente de oficina, que
+  // tiene a Angélica—, no hay nada que preguntar. Se enseña cuál es y se
+  // sigue.
+  if (IDENTIFICADO && IDENTIFICADO.coordinator_code) {
+    caja.style.display = 'none';
+    sel.innerHTML = '';
+    const o = document.createElement('option');
+    o.value = IDENTIFICADO.coordinator_code;
+    o.textContent = IDENTIFICADO.coordinator_name || IDENTIFICADO.coordinator_code;
+    sel.appendChild(o);
+    sel.value = IDENTIFICADO.coordinator_code;
+    return;
+  }
+
   if (!CATALOGOS || !Array.isArray(CATALOGOS.coordinadores) || CATALOGOS.coordinadores.length === 0) {
     await precargarCatalogos();
   }
@@ -1103,9 +1117,12 @@ async function entrar() {
       if (!IDENTIFICADO) return;
     }
 
-    // El coordinador solo se exige si hay lista de dónde elegirlo.
+    // El coordinador solo se exige cuando hay que elegirlo. Si el empleado ya
+    // lo trae asignado, el desplegable está oculto y se usa el suyo; si no
+    // hay catálogo de coordinadores, tampoco se exige (ver más abajo).
     const caja = document.getElementById('a-coord-caja');
-    const coord = (document.getElementById('a-coord').value || '').trim();
+    const coord = (IDENTIFICADO && IDENTIFICADO.coordinator_code)
+      || (document.getElementById('a-coord').value || '').trim();
     if (caja && caja.style.display !== 'none' && !coord) {
       mostrarError('err_sin_coord');
       return;
@@ -1115,8 +1132,9 @@ async function entrar() {
     // recargar la app, la cabecera se pinta antes de que llegue el catálogo,
     // y sin el nombre guardado se veía "FRANCISCO_CASTILLO" en pantalla.
     const selC = document.getElementById('a-coord');
-    const nomC = (selC && selC.selectedIndex > 0)
-      ? selC.options[selC.selectedIndex].textContent : '';
+    const nomC = (IDENTIFICADO && IDENTIFICADO.coordinator_name)
+      || ((selC && selC.selectedIndex > 0)
+            ? selC.options[selC.selectedIndex].textContent : '');
 
     SESION = Object.assign({}, IDENTIFICADO, {
       coordinator_code: coord || null,
