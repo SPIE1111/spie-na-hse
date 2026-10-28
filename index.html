@@ -541,6 +541,10 @@
       <div class="folio" id="listo-folio"></div>
       <p class="sub" id="listo-detalle" style="margin-top:10px"></p>
     </div>
+    <div id="listo-pdf" style="display:none">
+      <button class="btn secundario" onclick="pdfInspeccion()" data-t="pdf_btn"></button>
+      <p class="pie" data-t="pdf_aviso"></p>
+    </div>
     <button class="btn" onclick="ir('p-tipo')" data-t="listo_otro"></button>
   </section>
 
@@ -650,6 +654,12 @@ const TEXTOS = {
     v_enviar:          'Enviar inspección',
     v_listo_titulo:    'Inspección enviada',
     v_listo_detalle:   'Guárdate el folio por si necesitas consultarla después.',
+    pdf_btn:           'Descargar en PDF',
+    pdf_aviso:         'Se abre el cuadro de impresión: elige «Guardar como PDF».',
+    pdf_titulo:        'Inspección de vehículo',
+    pdf_coment:        'Comentarios',
+    pdf_sin_fotos:     'Sin fotos.',
+    pdf_generado:      'Generado el {fecha}',
     v_def_una:         'Hay 1 deficiencia en esta sección. Descríbela en la caja de comentarios antes de seguir.',
     v_def_varias:      'Hay {n} deficiencias en esta sección. Descríbelas en la caja de comentarios antes de seguir.',
     v_sin_def:         'Sin deficiencias en esta sección.',
@@ -756,6 +766,12 @@ const TEXTOS = {
     v_enviar:          'Submit inspection',
     v_listo_titulo:    'Inspection submitted',
     v_listo_detalle:   'Keep the number in case you need to look it up later.',
+    pdf_btn:           'Download as PDF',
+    pdf_aviso:         'The print dialog opens: choose "Save as PDF".',
+    pdf_titulo:        'Vehicle inspection',
+    pdf_coment:        'Comments',
+    pdf_sin_fotos:     'No photos.',
+    pdf_generado:      'Generated on {fecha}',
     v_def_una:         'There is 1 deficiency in this section. Describe it in the comments box before moving on.',
     v_def_varias:      'There are {n} deficiencies in this section. Describe them in the comments box before moving on.',
     v_sin_def:         'No deficiencies in this section.',
@@ -1840,6 +1856,11 @@ async function enviarHse() {
 }
 
 function mostrarListo(folio) {
+  // La pantalla de enviado es la misma para los dos formularios, así que hay
+  // que esconder el botón del PDF: por ahora solo lo lleva el de vehículos.
+  document.getElementById('listo-pdf').style.display = 'none';
+  ULTIMA_INSPECCION = null;
+
   document.getElementById('listo-titulo').textContent =
     folio ? t('listo_titulo') : t('listo_cola');
   document.getElementById('listo-folio').textContent = folio || '';
@@ -2424,6 +2445,58 @@ async function enviarVehiculo() {
   }
 }
 
+// Lo que se acaba de mandar, guardado para poder sacar el PDF. Se copia
+// ANTES de limpiar el formulario: mostrarListoVeh borra VEH y VEH_FOTOS, y
+// sin esta copia el botón de descargar no tendría nada que imprimir.
+let ULTIMA_INSPECCION = null;
+
+function guardarUltimaInspeccion(folio) {
+  if (!VEH) { ULTIMA_INSPECCION = null; return; }
+
+  // La clave de la sección y la del campo de comentario no se parecen:
+  // vehicle_operating guarda su texto en OPE_COMMENTS. Van emparejadas a
+  // mano porque deducirlas da EXTERIOR_COMMENTS, que no existe.
+  const CLAVE_COM = {
+    vehicle_exterior:  'EXT_COMMENTS',
+    vehicle_interior:  'INT_COMMENTS',
+    vehicle_operating: 'OPE_COMMENTS',
+    vehicle_hood:      'HOOD_COMMENTS',
+  };
+
+  const secciones = ((CATALOGOS && CATALOGOS.vehiculo) || []).map((sec) => ({
+    titulo: sec.titulo,
+    preguntas: (sec.preguntas || [])
+      .filter((q) => q.answer_type === 'yesno')
+      .map((q) => ({
+        label: q.label,
+        respuesta: VEH.respuestas[q.code],
+        // Se usa la misma función que el formulario para decidir si una
+        // respuesta es deficiencia, y no una copia: en "¿hay fuga?" lo malo
+        // es el sí, y dos lógicas distintas acabarían discrepando.
+        deficiencia: esDeficiencia(q, VEH.respuestas[q.code]),
+      })),
+    comentario: (VEH.comentarios[CLAVE_COM[sec.key]] || ''),
+  })).filter((sec) => sec.preguntas.length > 0);
+
+  ULTIMA_INSPECCION = {
+    folio: folio || '',
+    datos: Object.assign({}, VEH.datos || {}),
+    sitio: nombreSitio(VEH.site_id),
+    comentarios: Object.assign({}, VEH.comentarios || {}),
+    secciones: secciones,
+    fotos: Object.keys(VEH_FOTOS).map((slot) => ({
+      slot: slot,
+      url: 'data:' + VEH_FOTOS[slot].mime + ';base64,' + VEH_FOTOS[slot].base64,
+    })),
+  };
+}
+
+function nombreSitio(id) {
+  if (!id) return '';
+  const s = ((CATALOGOS && CATALOGOS.sitios) || []).find((x) => x.id === id);
+  return s ? s.name : '';
+}
+
 function mostrarListoVeh(folio) {
   document.getElementById('listo-titulo').textContent =
     folio ? t('v_listo_titulo') : t('listo_cola');
@@ -2431,10 +2504,134 @@ function mostrarListoVeh(folio) {
   document.getElementById('listo-detalle').textContent =
     folio ? t('v_listo_detalle') : t('listo_cola_det');
 
+  guardarUltimaInspeccion(folio);
+  document.getElementById('listo-pdf').style.display = ULTIMA_INSPECCION ? '' : 'none';
+
   VEH = null;
   VEH_FOTOS = {};
   pintarEstado();
   ir('p-listo');
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 8c · EL PDF DE LA INSPECCIÓN
+//
+// Se arma una página y se manda a imprimir, sin librerías. En un teléfono eso
+// importa: no hay nada que bajar, las fotos van con su resolución y funciona
+// igual con mala señal. A cambio hay que elegir "Guardar como PDF" en el
+// cuadro de impresión, y así se dice en la pantalla.
+// ══════════════════════════════════════════════════════════════════════════
+
+function escPdf(v) {
+  return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function pdfInspeccion() {
+  const u = ULTIMA_INSPECCION;
+  if (!u) return;
+
+  const estilo = '@page{size:letter;margin:14mm}' +
+    '@media screen{body{padding:16mm;max-width:216mm;margin:0 auto}}' +
+    '*{box-sizing:border-box}' +
+    'body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#111827;' +
+      'font-size:11.5pt;line-height:1.4;margin:0}' +
+    'h1{font-size:17pt;margin:0;color:#0f1e5a}' +
+    'h2{font-size:12pt;margin:18px 0 6px;color:#0f1e5a;border-bottom:2px solid #0f1e5a;padding-bottom:3px}' +
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;' +
+      'border-bottom:3px solid #0f1e5a;padding-bottom:10px}' +
+    '.folio{font-size:15pt;font-weight:800;color:#0f1e5a}' +
+    '.datos{display:grid;grid-template-columns:1fr 1fr;gap:2px 20px;margin-top:10px}' +
+    '.dato{padding:4px 0;border-bottom:1px solid #e5e7eb}' +
+    '.dato .e{font-size:8pt;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;' +
+      'font-weight:700;display:block}' +
+    'table{width:100%;border-collapse:collapse}' +
+    'td{padding:3px 0;vertical-align:top;border-bottom:1px solid #f3f4f6}' +
+    'td.r{width:26px;font-weight:800}' +
+    'td.a{width:46px;text-align:right;font-size:10pt;color:#6b7280}' +
+    '.si{color:#15803d}.no{color:#b91c1c}' +
+    '.nota{background:#f3f4f6;border-left:4px solid #9ca3af;padding:7px 10px;margin:7px 0 2px;' +
+      'font-size:10.5pt;white-space:pre-wrap}' +
+    '.fotos{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}' +
+    '.foto{border:1px solid #e5e7eb;padding:4px}' +
+    '.foto img{width:100%;display:block}' +
+    '.foto .pie{font-size:8.5pt;color:#6b7280;padding-top:3px}' +
+    '.pie-doc{margin-top:22px;padding-top:8px;border-top:1px solid #e5e7eb;font-size:9pt;color:#6b7280}' +
+    '.vacio{color:#6b7280;font-style:italic}' +
+    'h2,.foto{break-inside:avoid;page-break-inside:avoid}';
+
+  const d = u.datos || {};
+  const pares = [
+    [preguntaLabel('INSPECTION_DATE'), d.INSPECTION_DATE],
+    [preguntaLabel('DRIVER_NAME'), d.DRIVER_NAME],
+    [preguntaLabel('LICENSE_PLATE'), d.LICENSE_PLATE],
+    [preguntaLabel('ODOMETER'), d.ODOMETER],
+    ['Sitio', u.sitio],
+    ['Folio', u.folio],
+  ];
+
+  let h = '<div class="cab"><div><h1>' + escPdf(t('pdf_titulo')) + '</h1>' +
+          '<div style="font-size:10pt;color:#6b7280">SPIE North America · HSE</div></div>' +
+          '<div class="folio">' + escPdf(u.folio) + '</div></div>';
+
+  h += '<div class="datos">' + pares.map((p) =>
+    '<div class="dato"><span class="e">' + escPdf(p[0]) + '</span>' +
+    '<span>' + (p[1] ? escPdf(p[1]) : '—') + '</span></div>').join('') + '</div>';
+
+  (u.secciones || []).forEach((sec) => {
+    h += '<h2>' + escPdf(sec.titulo) + '</h2><table>';
+    // La marca dice si está BIEN o MAL, no lo que se contestó: una fuga se
+    // contesta "sí" y es un problema. Lo contestado va en su propia columna.
+    sec.preguntas.forEach((q) => {
+      h += '<tr><td class="r ' + (q.deficiencia ? 'no' : 'si') + '">' +
+           (q.deficiencia ? '&#10007;' : '&#10003;') + '</td>' +
+           '<td>' + escPdf(q.label) + '</td>' +
+           '<td class="a">' + escPdf(q.respuesta ? t('v_si') : t('v_no')) + '</td></tr>';
+    });
+    h += '</table>';
+    if (String(sec.comentario || '').trim() !== '') {
+      h += '<div class="nota">' + escPdf(sec.comentario) + '</div>';
+    }
+  });
+
+  const extra = (u.comentarios || {}).ADDITIONAL_COMMENTS;
+  if (String(extra || '').trim() !== '') {
+    h += '<h2>' + escPdf(t('pdf_coment')) + '</h2><div class="nota">' + escPdf(extra) + '</div>';
+  }
+
+  h += '<h2>' + escPdf(preguntaLabel('PHOTOS') || 'Fotos') + '</h2>';
+  if (!u.fotos || u.fotos.length === 0) {
+    h += '<p class="vacio">' + escPdf(t('pdf_sin_fotos')) + '</p>';
+  } else {
+    h += '<div class="fotos">' + u.fotos.map((f) =>
+      '<div class="foto"><img src="' + f.url + '" alt="">' +
+      '<div class="pie">' + escPdf(String(f.slot).replace('PHOTO_', '')) + '</div></div>'
+    ).join('') + '</div>';
+  }
+
+  h += '<div class="pie-doc">' +
+       escPdf(t('pdf_generado').replace('{fecha}', new Date().toLocaleString())) +
+       ' · ' + escPdf((SESION && SESION.full_name) || '') + '</div>';
+
+  const v = window.open('', '_blank');
+  if (!v) { alert(t('pdf_aviso')); return; }
+  v.document.open();
+  v.document.write('<!DOCTYPE html><html lang="' + (IDIOMA || 'es') + '"><head>' +
+    '<meta charset="utf-8"><title>' + escPdf(u.folio || 'inspeccion') + '</title>' +
+    '<style>' + estilo + '</style></head><body>' + h + '</body></html>');
+  v.document.close();
+
+  // Las fotos van incrustadas en el propio documento, así que no hay nada que
+  // descargar; aun así se espera un instante a que el navegador las pinte.
+  setTimeout(() => { try { v.focus(); v.print(); } catch (e) { /* la cerró */ } }, 400);
+}
+
+// La etiqueta de una pregunta, en el idioma que esté puesto.
+function preguntaLabel(code) {
+  const p = VEH_PREG[code];
+  return p ? p.label : code;
 }
 
 
