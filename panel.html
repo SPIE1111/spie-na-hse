@@ -201,6 +201,21 @@
   .metrica .etq { font-size: 12.5px; color: var(--gris); margin-top: 2px; }
   .metrica.aviso .num { color: var(--ambar); }
   .metrica.bien  .num { color: var(--verde); }
+  .avance { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; margin-bottom: 16px; }
+  .avance-grafica { background: var(--blanco); border: 2px solid var(--linea);
+                    border-radius: var(--radio); padding: 16px 20px;
+                    display: flex; align-items: center; gap: 18px; min-width: 300px; }
+  .avance-datos { flex: 1; min-width: 320px; display: flex; flex-direction: column; }
+  .avance-datos .metricas { margin-bottom: 12px; }
+  .avance-datos .lectura { margin-bottom: 0; flex: 1; }
+  .aro-pie { font-size: 13px; color: var(--gris); }
+  .aro-pie b { display: block; font-size: 15px; color: #111827; }
+  .aro-pie .aro-sub { font-size: 19px; font-weight: 800; color: var(--azul); }
+  .aro-meta { margin-top: 7px; font-size: 12.5px; font-weight: 700; }
+  .aro-meta.cumple { color: var(--verde); }
+  .aro-meta.cerca  { color: var(--ambar); }
+  .aro-meta.lejos  { color: var(--rojo); }
+
   .lectura { background: var(--blanco); border: 2px solid var(--linea);
              border-left: 5px solid var(--azul); border-radius: var(--radio);
              padding: 13px 16px; margin: 0 0 16px; font-size: 14.5px; }
@@ -313,15 +328,14 @@
       <div class="alta" id="e-alta">
         <h2 style="margin-top:0" data-t="emp_alta_titulo"></h2>
         <div class="fila">
-          <div class="campo"><label data-t="emp_nombre"></label>
+          <div class="campo crece"><label data-t="emp_nombre"></label>
             <input type="text" id="e-nombre" autocomplete="off"></div>
-          <div class="campo"><label data-t="emp_departamento"></label>
-            <select id="e-depto"></select></div>
           <div class="campo"><label data-t="emp_ubicacion"></label>
             <select id="e-ubic" onchange="alCambiarUbicacion()"></select></div>
-          <div class="campo" id="e-pais-caja"><label data-t="emp_pais"></label>
-            <select id="e-pais"></select></div>
         </div>
+        <!-- Lo que se va a guardar sin que nadie lo escriba. Se enseña antes
+             de dar de alta para que no haya sorpresas. -->
+        <p class="sub" id="e-derivado" style="margin:12px 0 0"></p>
         <div class="error" id="e-error"></div>
         <div style="margin-top:16px; display:flex; gap:10px">
           <button class="btn" id="e-guardar" onclick="darDeAlta()" data-t="emp_guardar"></button>
@@ -408,8 +422,13 @@
 
       <!-- La lectura de los números, antes de la tabla. Una tabla sola no
            dice si el mes va bien o mal. -->
-      <div id="c-metricas" class="metricas"></div>
-      <p class="lectura" id="c-lectura"></p>
+      <div class="avance">
+        <div class="avance-grafica" id="c-grafica"></div>
+        <div class="avance-datos">
+          <div id="c-metricas" class="metricas"></div>
+          <p class="lectura" id="c-lectura"></p>
+        </div>
+      </div>
 
       <div class="cuenta" id="c-cuenta"></div>
       <div class="caja-tabla"><table id="c-tabla"></table></div>
@@ -439,7 +458,7 @@ const CONFIG = {
   // La misma llave anon pública que la app. Por sí sola no abre nada: sin
   // haber entrado con contraseña no se obtiene token, y sin token el servidor
   // no contesta a ninguna acción.
-  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkbGN2Y2ppaHZwd2lvbWdnc2dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5ODIxMTEsImV4cCI6MjEwNDU1ODExMX0.kk2W8L98cuUpqS0z3OVj3xJA5XkO4_1yYQr2VWaDXYY',
+  ANON_KEY: 'PEGA_AQUI_TU_ANON_KEY',
 };
 
 const API = CONFIG.SUPABASE_URL + '/functions/v1/panel-api';
@@ -520,14 +539,20 @@ const TEXTOS = {
     cum_todos: 'Todos los activos subieron algo este mes.',
     cum_lectura: '{subieron} de {total} personas reportaron este mes. ' +
                  'Entre todas subieron {reportes} reportes, {promedio} de media por persona que participó. ' +
-                 'Quedan {sin} sin reportar.',
+                 '{queda} {sin} sin reportar.',
+    cum_queda_1: 'Queda', cum_queda_n: 'Quedan',
+    cum_participacion: 'Participación',
+    cum_meta: 'Meta {meta}%',
+    cum_cumple: 'Meta cumplida',
+    cum_faltan: 'Faltan {n} personas para la meta',
+    cum_falta1: 'Falta 1 persona para la meta',
 
     emp_nueva: 'Dar de alta', emp_alta_titulo: 'Nuevo empleado',
     emp_masiva: 'Alta masiva', emp_masiva_titulo: 'Dar de alta a varios de una vez',
-    emp_masiva_ayuda: 'Un renglón por persona: nombre, departamento y ubicación, ' +
-                      'separados por punto y coma. La ubicación puede ser el nombre del ' +
-                      'parque o la oficina; si la dejas vacía, pon US o CA en su lugar.',
-    emp_masiva_ej: 'Juan Perez; BLADE; Alta Farms\nMaria Lopez; SUPPORT; US',
+    emp_masiva_ayuda: 'Un nombre por renglón. Si alguien es de oficina, ' +
+                      'escribe la ubicación después del nombre, separada por punto y coma. ' +
+                      'A los técnicos no hace falta ponerles nada más.',
+    emp_masiva_ej: 'Juan Perez\nMaria Lopez; Oficina Estados Unidos- Katy\nLuis Diaz',
     emp_masiva_btn: 'Dar de alta a todos',
     emp_masiva_res: '{altas} altas y {fallos} con problema.',
     emp_editar_titulo: 'Editar empleado',
@@ -536,7 +561,11 @@ const TEXTOS = {
     emp_correo: 'Correo (opcional)', emp_idioma: 'Idioma de la app',
     emp_nombre: 'Nombre completo', emp_departamento: 'Departamento',
     emp_ubicacion: 'Ubicación', emp_pais: 'País', emp_guardar: 'Dar de alta',
-    emp_sin_ubicacion: 'Sin asignar',
+    emp_sin_ubicacion: 'Sin asignar · es técnico',
+    emp_derivado_ofi: 'Se guardará en {sitio}, país {pais}, departamento {depto}, con {coord} como coordinadora.',
+    emp_derivado_tec: 'Su país, departamento y parque se llenarán solos con el primer reporte que levante.',
+    emp_incompleto: 'Pendiente',
+    emp_incompleto_ayuda: 'Todavía no ha reportado: su país y departamento se llenarán con el primer reporte.',
     emp_creado: 'Alta hecha. {nombre} tiene el número {numero}.',
     emp_err_nombre: 'Escribe el nombre completo.',
     emp_err_depto: 'Elige el departamento.',
@@ -625,14 +654,19 @@ const TEXTOS = {
     cum_todos: 'Every active person reported something this month.',
     cum_lectura: '{subieron} of {total} people reported this month. ' +
                  'Together they filed {reportes} reports, {promedio} on average per person who took part. ' +
-                 '{sin} have not reported.',
+                 '{sin} {queda} not reported.',
+    cum_queda_1: 'has', cum_queda_n: 'have',
+    cum_participacion: 'Participation',
+    cum_meta: 'Target {meta}%',
+    cum_cumple: 'Target met',
+    cum_faltan: '{n} people short of the target',
+    cum_falta1: '1 person short of the target',
 
     emp_nueva: 'New employee', emp_alta_titulo: 'New employee',
     emp_masiva: 'Bulk create', emp_masiva_titulo: 'Create several at once',
-    emp_masiva_ayuda: 'One row per person: name, department and location, ' +
-                      'separated by semicolons. The location can be the park or office name; ' +
-                      'if you leave it empty, put US or CA instead.',
-    emp_masiva_ej: 'Juan Perez; BLADE; Alta Farms\nMaria Lopez; SUPPORT; US',
+    emp_masiva_ayuda: 'One name per row. For office staff, write the location after ' +
+                      'the name, separated by a semicolon. Technicians need nothing else.',
+    emp_masiva_ej: 'Juan Perez\nMaria Lopez; Oficina Estados Unidos- Katy\nLuis Diaz',
     emp_masiva_btn: 'Create all',
     emp_masiva_res: '{altas} created, {fallos} with problems.',
     emp_editar_titulo: 'Edit employee',
@@ -641,7 +675,11 @@ const TEXTOS = {
     emp_correo: 'Email (optional)', emp_idioma: 'App language',
     emp_nombre: 'Full name', emp_departamento: 'Department',
     emp_ubicacion: 'Location', emp_pais: 'Country', emp_guardar: 'Create',
-    emp_sin_ubicacion: 'Not assigned',
+    emp_sin_ubicacion: 'Not assigned · technician',
+    emp_derivado_ofi: 'Will be saved at {sitio}, country {pais}, department {depto}, with {coord} as coordinator.',
+    emp_derivado_tec: 'Their country, department and site will fill in by themselves with their first report.',
+    emp_incompleto: 'Pending',
+    emp_incompleto_ayuda: 'Has not reported yet: country and department will fill in with the first report.',
     emp_creado: 'Done. {nombre} has number {numero}.',
     emp_err_nombre: 'Enter the full name.',
     emp_err_depto: 'Choose the department.',
@@ -678,6 +716,7 @@ let HSE = [];          // todas las filas que el servidor dejó ver
 let VEH = [];
 let EMP = [];
 let CUM = [];          // cumplimiento del mes que se está viendo
+let META = 95;         // la meta del mes, en porcentaje. La manda el servidor.
 let CATALOGOS = null;  // ubicaciones, departamentos, países, clasificaciones
 
 function texto(v) { return (v === null || v === undefined) ? '' : String(v); }
@@ -890,7 +929,10 @@ async function cargarTodo() {
   try {
     if (!CATALOGOS) {
       const c = await api('ubicaciones', {});
-      if (c.ok) CATALOGOS = c;
+      if (c.ok) {
+        CATALOGOS = c;
+        if (Number.isFinite(Number(c.meta_cumplimiento))) META = Number(c.meta_cumplimiento);
+      }
     }
 
     // Una primera pasada en cuanto llega el catálogo: país, sitio y
@@ -1000,39 +1042,32 @@ function prepararFiltros() {
     selEstado.value = antes;
   }
 
-  // Formulario de alta
   const deptos = (CATALOGOS && CATALOGOS.departamentos) || [];
-  const selD = document.getElementById('e-depto');
-  if (selD) {
-    const antes = selD.value;
-    selD.innerHTML = '';
-    selD.appendChild(opcion('', '—'));
-    deptos.forEach((d) => selD.appendChild(opcion(d.code, d.label)));
-    selD.value = antes;
-  }
+
+  // Formulario de alta. Ya no hay desplegable de departamento ni de país:
+  // en el alta solo se escribe el nombre y, como mucho, se elige la oficina.
+  // En el alta solo se ofrecen las oficinas. A un técnico no se le asigna
+  // parque aquí: el suyo sale del primer reporte que levante, que es el que
+  // sabe de verdad dónde está trabajando.
+  const oficinas = ubic.filter((u) => u.kind === 'office');
   const selU = document.getElementById('e-ubic');
   if (selU) {
     const antes = selU.value;
     selU.innerHTML = '';
     selU.appendChild(opcion('', t('emp_sin_ubicacion')));
-    ubic.forEach((u) => selU.appendChild(
-      opcion(u.id, u.name + (u.kind === 'office' ? ' ·' : ''))));
+    oficinas.forEach((u) => selU.appendChild(opcion(u.id, u.name)));
     selU.value = antes;
   }
-  const selP = document.getElementById('e-pais');
-  if (selP) {
-    const antes = selP.value;
-    selP.innerHTML = '';
-    selP.appendChild(opcion('', '—'));
-    paises.forEach((p) => selP.appendChild(
-      opcion(p.code, IDIOMA === 'es' ? p.name_es : p.name_en)));
-    selP.value = antes;
-  }
-  // Los mismos desplegables para el formulario de edición.
+  // Los desplegables del formulario de edición, donde sí se puede corregir
+  // todo a mano.
   const selXD = document.getElementById('x-depto');
   if (selXD) {
     const antes = selXD.value;
     selXD.innerHTML = '';
+    // Con opción vacía: un técnico que todavía no ha reportado no tiene
+    // departamento, y sin este renglón el formulario le pondría el primero
+    // de la lista sin que nadie lo decidiera.
+    selXD.appendChild(opcion('', '—'));
     deptos.forEach((d) => selXD.appendChild(opcion(d.code, d.label)));
     selXD.value = antes;
   }
@@ -1102,6 +1137,16 @@ function celda(texto_, clase) {
   const td = document.createElement('td');
   td.textContent = texto(texto_);
   if (clase) td.className = clase;
+  return td;
+}
+
+function celdaPendiente() {
+  const td = document.createElement('td');
+  const et = document.createElement('span');
+  et.className = 'etiqueta et-aviso';
+  et.textContent = t('emp_incompleto');
+  et.title = t('emp_incompleto_ayuda');
+  td.appendChild(et);
   return td;
 }
 
@@ -1555,7 +1600,7 @@ function pintarEmpleados() {
     const d = document.createElement('tbody');
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.className = 'vacio'; td.colSpan = 7; td.textContent = t('sin_datos');
+    td.className = 'vacio'; td.colSpan = 9; td.textContent = t('sin_datos');
     tr.appendChild(td); d.appendChild(tr); tabla.appendChild(d);
     return;
   }
@@ -1563,7 +1608,7 @@ function pintarEmpleados() {
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
   const cab = [t('t_numero'), t('t_nombre'), t('t_departamento'), t('t_ubicacion'),
-               t('t_pais'), t('t_estado'), t('t_ultimo_acceso')];
+               t('t_pais'), t('t_coordinador'), t('t_estado'), t('t_ultimo_acceso')];
   if (puedeEditar) cab.push(t('t_acciones'));
   cab.forEach((h) => { const th = document.createElement('th'); th.textContent = h; trh.appendChild(th); });
   thead.appendChild(trh); tabla.appendChild(thead);
@@ -1573,9 +1618,14 @@ function pintarEmpleados() {
     const tr = document.createElement('tr');
     tr.appendChild(celda(e.employee_no, 'folio-cel'));
     tr.appendChild(celda(e.full_name));
-    tr.appendChild(celda(e.department));
+
+    // Un empleado recién dado de alta no tiene departamento ni país todavía:
+    // llegan con su primer reporte. Se marca como pendiente en vez de dejar
+    // la celda en blanco, que parecería un error.
+    tr.appendChild(e.department ? celda(e.department) : celdaPendiente());
     tr.appendChild(celda(e.site));
-    tr.appendChild(celda(e.country_code));
+    tr.appendChild(e.country_code ? celda(e.country_code) : celdaPendiente());
+    tr.appendChild(celda(e.coordinador));
 
     const td = document.createElement('td');
     const et = document.createElement('span');
@@ -1636,7 +1686,9 @@ function abrirAlta() {
   cerrarEdicion(); cerrarMasiva();
   document.getElementById('e-alta').classList.add('abierta');
   document.getElementById('e-nombre').value = '';
+  document.getElementById('e-ubic').value = '';
   document.getElementById('e-error').classList.remove('visible');
+  alCambiarUbicacion();
   document.getElementById('e-nombre').focus();
 }
 
@@ -1694,8 +1746,8 @@ async function guardarEdicion() {
 
   const fallar = (clave) => { err.textContent = t(clave); err.classList.add('visible'); };
   if (nombre.length < 3) return fallar('emp_err_nombre');
-  if (!depto) return fallar('emp_err_depto');
-  if (!ubic && !pais) return fallar('emp_err_pais');
+  // El departamento y el país pueden quedarse vacíos: hay fichas a medias a
+  // propósito, las de quien todavía no ha levantado su primer reporte.
 
   const boton = document.getElementById('x-guardar');
   boton.disabled = true;
@@ -1750,23 +1802,20 @@ function cerrarMasiva() {
   if (c) c.classList.remove('abierta');
 }
 
-// Acepta punto y coma, tabulador o coma como separador, porque según de dónde
-// se pegue viene de una forma o de otra.
+// Un nombre por renglón, y como mucho la ubicación detrás. Acepta punto y
+// coma o tabulador como separador, según de dónde se pegue.
+//
+// Ya no se pide departamento ni país: de la oficina salen solos, y de un
+// técnico llegan con su primer reporte.
 function renglonesMasiva(texto_) {
   return (texto_ || '').split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l !== '')
     .map((l) => {
-      const partes = l.split(/[;\t]|,(?=\s)/).map((x) => x.trim());
-      const fila = {
-        nombre: partes[0] || '',
-        departamento: (partes[1] || '').toUpperCase(),
-      };
-      const ubic = partes[2] || '';
-      // Si la tercera columna son dos letras, es el país; si no, la ubicación.
-      if (/^(US|CA)$/i.test(ubic)) fila.pais = ubic.toUpperCase();
-      else if (ubic) fila.sitio = ubic;
-      if (partes[3]) fila.correo = partes[3];
+      const partes = l.split(/[;\t]/).map((x) => x.trim());
+      const fila = { nombre: partes[0] || '' };
+      if (partes[1]) fila.sitio = partes[1];
+      if (partes[2]) fila.correo = partes[2];
       return fila;
     });
 }
@@ -1832,12 +1881,32 @@ async function darDeAltaMasiva() {
   }
 }
 
-// El país solo se pregunta cuando no hay ubicación: si la hay, el país es el
-// de esa ubicación y preguntarlo otra vez solo serviría para contradecirse.
+// Ya no se pregunta ni el país ni el departamento. Si se elige una oficina,
+// los dos salen de ella junto con el coordinador; si no se elige nada, es un
+// técnico y sus datos llegan con su primer reporte.
+//
+// Lo que se va a guardar se enseña aquí abajo antes de dar al botón: un campo
+// que se llena solo y no se ve es un campo del que nadie se fía.
 function alCambiarUbicacion() {
-  const caja = document.getElementById('e-pais-caja');
+  const caja = document.getElementById('e-derivado');
   if (!caja) return;
-  caja.style.display = valor('e-ubic') ? 'none' : '';
+
+  const id = valor('e-ubic');
+  if (!id) { caja.textContent = t('emp_derivado_tec'); return; }
+
+  const sitio = ((CATALOGOS && CATALOGOS.ubicaciones) || []).find((u) => u.id === id);
+  const coord = ((CATALOGOS && CATALOGOS.coordinadores) || [])
+    .find((k) => sitio && k.code === sitio.coordinator_code);
+  const pais = ((CATALOGOS && CATALOGOS.paises) || [])
+    .find((x) => sitio && x.code === sitio.country_code);
+  const depto = ((CATALOGOS && CATALOGOS.departamentos) || [])
+    .find((d) => d.code === 'SUPPORT');
+
+  caja.textContent = t('emp_derivado_ofi')
+    .replace('{sitio}', sitio ? sitio.name : '—')
+    .replace('{pais}', pais ? (IDIOMA === 'es' ? pais.name_es : pais.name_en) : '—')
+    .replace('{depto}', depto ? depto.label : 'Soporte')
+    .replace('{coord}', coord ? coord.name : '—');
 }
 
 async function darDeAlta() {
@@ -1845,15 +1914,10 @@ async function darDeAlta() {
   err.classList.remove('visible');
 
   const nombre = (document.getElementById('e-nombre').value || '').trim();
-  const depto = valor('e-depto');
   const ubic = valor('e-ubic');
-  const pais = valor('e-pais');
 
   const fallar = (clave) => { err.textContent = t(clave); err.classList.add('visible'); };
-
   if (nombre.length < 3) return fallar('emp_err_nombre');
-  if (!depto) return fallar('emp_err_depto');
-  if (!ubic && !pais) return fallar('emp_err_pais');
 
   const boton = document.getElementById('e-guardar');
   boton.disabled = true;
@@ -1861,9 +1925,7 @@ async function darDeAlta() {
   try {
     const r = await api('empleado-alta', {
       full_name: nombre,
-      department_code: depto,
       site_id: ubic || null,
-      country_code: ubic ? null : pais,
     });
 
     if (!r.ok) { err.textContent = detalleServidor(r); err.classList.add('visible'); return; }
@@ -1919,6 +1981,80 @@ function filtradasCum() {
   });
 }
 
+// El aro del avance. Se dibuja a mano en SVG y no con una librería: son
+// treinta líneas, no hace falta bajar nada, y así funciona igual el día que
+// el CDN no conteste.
+//
+// El color sale de la meta, no de un número fijo: si mañana la meta baja al
+// 80 %, el verde empieza en el 80 % sin tocar esto.
+function aroAvance(pct, meta) {
+  const r = 52;
+  const c = 2 * Math.PI * r;
+  const avance = Math.max(0, Math.min(100, pct));
+  const trazo = (avance / 100) * c;
+
+  const color = avance >= meta ? 'var(--verde)'
+              : avance >= meta * 0.8 ? 'var(--ambar)'
+              : 'var(--rojo)';
+
+  // La marca de la meta, en el mismo círculo. Empieza arriba y va en el
+  // sentido de las agujas del reloj, igual que el aro.
+  const ang = (meta / 100) * 2 * Math.PI - Math.PI / 2;
+  const x1 = 70 + Math.cos(ang) * (r - 11);
+  const y1 = 70 + Math.sin(ang) * (r - 11);
+  const x2 = 70 + Math.cos(ang) * (r + 11);
+  const y2 = 70 + Math.sin(ang) * (r + 11);
+
+  return '' +
+    '<svg width="140" height="140" viewBox="0 0 140 140" role="img" ' +
+         'aria-label="' + Math.round(avance) + '%">' +
+      '<circle cx="70" cy="70" r="' + r + '" fill="none" stroke="var(--linea)" stroke-width="15"/>' +
+      '<circle cx="70" cy="70" r="' + r + '" fill="none" stroke="' + color + '" ' +
+              'stroke-width="15" stroke-linecap="round" ' +
+              'stroke-dasharray="' + trazo.toFixed(1) + ' ' + (c - trazo).toFixed(1) + '" ' +
+              'transform="rotate(-90 70 70)"/>' +
+      '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" ' +
+            'x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" ' +
+            'stroke="var(--azul)" stroke-width="3" stroke-linecap="round"/>' +
+      '<text x="70" y="70" text-anchor="middle" dominant-baseline="central" ' +
+            'font-size="30" font-weight="800" fill="var(--azul)">' +
+        Math.round(avance) + '%</text>' +
+    '</svg>';
+}
+
+function pintarGrafica(subieron, total) {
+  const caja = document.getElementById('c-grafica');
+  if (!caja) return;
+
+  const pct = total > 0 ? (subieron / total) * 100 : 0;
+
+  // Cuánta gente más tendría que reportar para llegar a la meta.
+  const necesarios = Math.ceil((META / 100) * total);
+  const faltan = Math.max(0, necesarios - subieron);
+
+  let estado, clase;
+  if (total === 0)      { estado = ''; clase = ''; }
+  else if (faltan === 0) { estado = t('cum_cumple'); clase = 'cumple'; }
+  else if (faltan === 1) { estado = t('cum_falta1'); clase = pct >= META * 0.8 ? 'cerca' : 'lejos'; }
+  else { estado = t('cum_faltan').replace('{n}', faltan); clase = pct >= META * 0.8 ? 'cerca' : 'lejos'; }
+
+  caja.innerHTML =
+    aroAvance(pct, META) +
+    '<div class="aro-pie">' +
+      '<b></b>' +
+      '<span class="aro-sub"></span>' +
+      '<div class="aro-meta ' + clase + '"></div>' +
+    '</div>';
+
+  // El texto se pone con textContent y no dentro del HTML de arriba: los
+  // nombres y los números no tienen por qué acabar interpretados como
+  // etiquetas.
+  caja.querySelector('.aro-pie b').textContent = t('cum_participacion');
+  caja.querySelector('.aro-sub').textContent = subieron + ' / ' + total;
+  caja.querySelector('.aro-meta').textContent =
+    t('cum_meta').replace('{meta}', META) + (estado ? ' · ' + estado : '');
+}
+
 function metrica(num, etiqueta, clase) {
   const d = document.createElement('div');
   d.className = 'metrica' + (clase ? ' ' + clase : '');
@@ -1943,27 +2079,28 @@ function pintarCumplimiento() {
   const reportes  = CUM.reduce((a, f) => a + (f.total || 0), 0);
   const promedio  = subieron > 0 ? (reportes / subieron) : 0;
 
+  pintarGrafica(subieron, total);
+
   cajaM.innerHTML = '';
   cajaM.appendChild(metrica(total, t('cum_personas')));
-  cajaM.appendChild(metrica(subieron, t('cum_subieron'), subieron === total && total > 0 ? 'bien' : ''));
+  const pctPart = total > 0 ? (subieron / total) * 100 : 0;
+  cajaM.appendChild(metrica(subieron, t('cum_subieron'), pctPart >= META && total > 0 ? 'bien' : ''));
   cajaM.appendChild(metrica(sin, t('cum_sin'), sin > 0 ? 'aviso' : 'bien'));
   cajaM.appendChild(metrica(reportes, t('cum_total')));
 
-  if (total === 0) {
-    lectura.textContent = t('sin_datos');
-  } else if (reportes === 0) {
-    lectura.textContent = t('cum_nadie');
-  } else if (sin === 0) {
-    lectura.textContent = t('cum_todos') + ' ' + t('cum_lectura')
-      .replace('{subieron}', subieron).replace('{total}', total)
-      .replace('{reportes}', reportes).replace('{promedio}', promedio.toFixed(1))
-      .replace('{sin}', sin);
-  } else {
-    lectura.textContent = t('cum_lectura')
-      .replace('{subieron}', subieron).replace('{total}', total)
-      .replace('{reportes}', reportes).replace('{promedio}', promedio.toFixed(1))
-      .replace('{sin}', sin);
-  }
+  // Un decimal solo cuando aporta algo: "1.0 de media" se lee peor que "1".
+  const prom = Number.isInteger(promedio) ? String(promedio) : promedio.toFixed(1);
+
+  const frase = () => t('cum_lectura')
+    .replace('{subieron}', subieron).replace('{total}', total)
+    .replace('{reportes}', reportes).replace('{promedio}', prom)
+    .replace('{queda}', sin === 1 ? t('cum_queda_1') : t('cum_queda_n'))
+    .replace('{sin}', sin);
+
+  if (total === 0)        lectura.textContent = t('sin_datos');
+  else if (reportes === 0) lectura.textContent = t('cum_nadie');
+  else if (sin === 0)      lectura.textContent = t('cum_todos');
+  else                     lectura.textContent = frase();
 
   const filas = filtradasCum();
   document.getElementById('c-cuenta').textContent =
@@ -2088,6 +2225,7 @@ function datosParaExportar(que) {
       o[t('t_departamento')] = e.department;
       o[t('t_ubicacion')] = e.site;
       o[t('t_pais')] = e.country_code;
+      o[t('t_coordinador')] = e.coordinador;
       o[t('t_estado')] = e.activo ? t('e_activo') : t('e_baja');
       o[t('t_ultimo_acceso')] = e.ultimo_acceso;
       return o;
