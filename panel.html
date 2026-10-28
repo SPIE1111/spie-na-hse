@@ -361,10 +361,6 @@
             <select id="x-ubic" onchange="alCambiarUbicacionEdicion()"></select></div>
           <div class="campo" id="x-pais-caja"><label data-t="emp_pais"></label>
             <select id="x-pais"></select></div>
-          <div class="campo"><label data-t="emp_correo"></label>
-            <input type="email" id="x-correo" autocomplete="off"></div>
-          <div class="campo"><label data-t="emp_idioma"></label>
-            <select id="x-idioma"></select></div>
         </div>
         <div class="error" id="x-error"></div>
         <div style="margin-top:16px; display:flex; gap:10px">
@@ -528,6 +524,14 @@ const TEXTOS = {
     com_sin: 'Todavía no hay comentarios de seguimiento.',
     com_poner: 'Escribe qué se hizo con este reporte…',
     com_enviar: 'Agregar comentario',
+    pdf_btn: 'Descargar en PDF',
+    pdf_aviso: 'Se abre el cuadro de impresión: elige «Guardar como PDF» como destino.',
+    pdf_titulo: 'Inspección de vehículo',
+    pdf_sin_fotos: 'Sin fotos.',
+    pdf_sin_com: 'Sin comentarios de seguimiento.',
+    pdf_generado: 'Generado el {fecha} por {quien}',
+    pdf_coment_tecnico: 'Comentarios del técnico',
+    pdf_adicional: 'Comentarios adicionales',
     com_vacio: 'El comentario no puede ir vacío.',
 
     cum_personas: 'personas activas',
@@ -558,7 +562,6 @@ const TEXTOS = {
     emp_editar_titulo: 'Editar empleado',
     emp_guardar_cambios: 'Guardar cambios',
     emp_editado: 'Cambios guardados para {nombre}.',
-    emp_correo: 'Correo (opcional)', emp_idioma: 'Idioma de la app',
     emp_nombre: 'Nombre completo', emp_departamento: 'Departamento',
     emp_ubicacion: 'Ubicación', emp_pais: 'País', emp_guardar: 'Dar de alta',
     emp_sin_ubicacion: 'Sin asignar · es técnico',
@@ -643,6 +646,14 @@ const TEXTOS = {
     com_sin: 'No follow-up notes yet.',
     com_poner: 'Write what was done about this report…',
     com_enviar: 'Add note',
+    pdf_btn: 'Download as PDF',
+    pdf_aviso: 'The print dialog opens: choose "Save as PDF" as the destination.',
+    pdf_titulo: 'Vehicle inspection',
+    pdf_sin_fotos: 'No photos.',
+    pdf_sin_com: 'No follow-up notes.',
+    pdf_generado: 'Generated on {fecha} by {quien}',
+    pdf_coment_tecnico: "Technician's comments",
+    pdf_adicional: 'Additional comments',
     com_vacio: 'The note cannot be empty.',
 
     cum_personas: 'active people',
@@ -672,7 +683,6 @@ const TEXTOS = {
     emp_editar_titulo: 'Edit employee',
     emp_guardar_cambios: 'Save changes',
     emp_editado: 'Changes saved for {nombre}.',
-    emp_correo: 'Email (optional)', emp_idioma: 'App language',
     emp_nombre: 'Full name', emp_departamento: 'Department',
     emp_ubicacion: 'Location', emp_pais: 'Country', emp_guardar: 'Create',
     emp_sin_ubicacion: 'Not assigned · technician',
@@ -717,6 +727,11 @@ let VEH = [];
 let EMP = [];
 let CUM = [];          // cumplimiento del mes que se está viendo
 let META = 95;         // la meta del mes, en porcentaje. La manda el servidor.
+
+// Lo que se está viendo en el cajón. Se guarda para poder armar el PDF sin
+// volver a pedirle nada al servidor: lo que sale impreso es exactamente lo
+// que la persona tiene delante.
+let ABIERTO = null;
 let CATALOGOS = null;  // ubicaciones, departamentos, países, clasificaciones
 
 function texto(v) { return (v === null || v === undefined) ? '' : String(v); }
@@ -1089,12 +1104,6 @@ function prepararFiltros() {
       opcion(p.code, IDIOMA === 'es' ? p.name_es : p.name_en)));
     selXP.value = antes;
   }
-  const selXI = document.getElementById('x-idioma');
-  if (selXI && selXI.options.length === 0) {
-    selXI.appendChild(opcion('es', 'Español'));
-    selXI.appendChild(opcion('en', 'English'));
-  }
-
   alCambiarUbicacion();
   alCambiarUbicacionEdicion();
 }
@@ -1333,6 +1342,7 @@ async function abrirDetalleHse(f) {
   abrirCajon(t('detalle_hse'), f.report_code);
   const c = document.getElementById('cajon-cuerpo');
   c.innerHTML = '';
+  ABIERTO = { tipo: 'hse', fila: f, archivos: [], hilo: [] };
 
   [[t('t_fecha'), texto(f.occurred_date) + ' ' + texto(f.occurred_time)],
    [t('t_persona'), f.reporter_name],
@@ -1355,6 +1365,7 @@ async function abrirDetalleVeh(f) {
   abrirCajon(t('detalle_veh'), f.report_code);
   const c = document.getElementById('cajon-cuerpo');
   c.innerHTML = '';
+  ABIERTO = { tipo: 'vehiculo', fila: f, respuestas: [], comentarios: {}, archivos: [], hilo: [] };
 
   [[t('t_fecha'), f.inspection_date],
    [t('t_conductor'), f.driver_name],
@@ -1369,6 +1380,8 @@ async function abrirDetalleVeh(f) {
   try {
     const r = await api('vehiculo-detalle', { report_code: f.report_code });
     if (r.ok) {
+      ABIERTO.respuestas = r.respuestas || [];
+      ABIERTO.comentarios = r.comentarios || {};
       let seccion = null;
       (r.respuestas || []).forEach((q) => {
         if (q.seccion !== seccion) {
@@ -1417,6 +1430,8 @@ async function pintarFotos(cont, folio) {
       cont.appendChild(p);
       return;
     }
+
+    if (ABIERTO) ABIERTO.archivos = r.archivos;
 
     const g = document.createElement('div');
     g.className = 'galeria';
@@ -1493,6 +1508,29 @@ async function pintarSeguimiento(cont, folio) {
   caja.appendChild(b);
   cont.appendChild(caja);
 
+  // El PDF va justo después del cuadro de comentario, que es donde Evelyn lo
+  // pidió: se revisa, se deja constancia y se descarga con todo dentro.
+  if (ABIERTO && ABIERTO.tipo === 'vehiculo') {
+    const pie = document.createElement('div');
+    pie.style.marginTop = '22px';
+    pie.style.paddingTop = '18px';
+    pie.style.borderTop = '2px solid var(--linea)';
+
+    const bp = document.createElement('button');
+    bp.className = 'btn secundario';
+    bp.textContent = t('pdf_btn');
+    bp.onclick = () => pdfVehiculo();
+
+    const nota = document.createElement('div');
+    nota.className = 'cuenta';
+    nota.style.marginTop = '8px';
+    nota.textContent = t('pdf_aviso');
+
+    pie.appendChild(bp);
+    pie.appendChild(nota);
+    cont.appendChild(pie);
+  }
+
   await cargarComentarios(folio);
 }
 
@@ -1502,6 +1540,7 @@ async function cargarComentarios(folio) {
   try {
     const r = await api('comentarios', { report_code: folio });
     lista.innerHTML = '';
+    if (ABIERTO) ABIERTO.hilo = (r.ok && r.comentarios) ? r.comentarios : [];
 
     if (!r.ok || !r.comentarios || r.comentarios.length === 0) {
       const v = document.createElement('div');
@@ -1712,8 +1751,6 @@ function abrirEdicion(e) {
   document.getElementById('x-depto').value  = texto(e.department_code);
   document.getElementById('x-ubic').value   = texto(e.site_id);
   document.getElementById('x-pais').value   = texto(e.country_code);
-  document.getElementById('x-correo').value = texto(e.email);
-  document.getElementById('x-idioma').value = texto(e.lang) || 'en';
   document.getElementById('x-error').classList.remove('visible');
   alCambiarUbicacionEdicion();
   document.getElementById('e-editar').classList.add('abierta');
@@ -1741,8 +1778,6 @@ async function guardarEdicion() {
   const depto  = valor('x-depto');
   const ubic   = valor('x-ubic');
   const pais   = valor('x-pais');
-  const correo = (document.getElementById('x-correo').value || '').trim();
-  const idioma = valor('x-idioma');
 
   const fallar = (clave) => { err.textContent = t(clave); err.classList.add('visible'); };
   if (nombre.length < 3) return fallar('emp_err_nombre');
@@ -1752,16 +1787,15 @@ async function guardarEdicion() {
   const boton = document.getElementById('x-guardar');
   boton.disabled = true;
 
-  // Se mandan siempre todos los campos: el formulario los enseña todos, así
-  // que lo que se ve en pantalla es lo que queda guardado. El correo vacío
-  // viaja como cadena vacía, que para el servidor quiere decir "bórralo".
+  // Solo viaja lo que el formulario enseña. El correo y el idioma NO se
+  // mandan a propósito: si fueran en la petición como cadena vacía, el
+  // servidor entendería "bórralos", y editar un nombre acabaría borrando el
+  // correo de esa persona sin que nadie lo pidiera.
   const quien = EDITANDO.full_name;
   const cuerpo = {
     employee_no: EDITANDO.employee_no,
     full_name: nombre,
     department_code: depto,
-    email: correo,
-    emp_lang: idioma,
   };
   if (ubic) { cuerpo.site_id = ubic; }
   else      { cuerpo.quitar_sitio = true; cuerpo.country_code = pais; }
@@ -1942,6 +1976,204 @@ async function darDeAlta() {
   } finally {
     boton.disabled = false;
   }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 10c · EL PDF DE LA INSPECCIÓN
+//
+// Se arma una página completa y se manda a imprimir. No se usa ninguna
+// librería de PDF a propósito:
+//
+//   · No hay nada que bajar de un CDN, así que no hay nada que pueda fallar
+//     el día que el CDN no conteste.
+//   · Las fotos entran tal cual, con su resolución, sin pasar por un lienzo
+//     que las deja borrosas.
+//   · El navegador pagina solo, y se puede guardar o imprimir en papel.
+//
+// A cambio, no es una descarga de un clic: se abre el cuadro de impresión y
+// hay que elegir "Guardar como PDF". Está dicho en la pantalla para que no
+// sorprenda.
+// ══════════════════════════════════════════════════════════════════════════
+
+function esc(v) {
+  return texto(v).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+const ESTILO_PDF = `
+  @page { size: letter; margin: 14mm; }
+  /* La ventana se ve en pantalla antes de imprimir. @page solo manda en
+     papel, así que en pantalla el margen hay que ponerlo a mano o el texto
+     acaba tocando el borde. */
+  @media screen { body { padding: 16mm; max-width: 216mm; margin: 0 auto; } }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+         color: #111827; font-size: 11.5pt; line-height: 1.4; margin: 0; }
+  h1 { font-size: 17pt; margin: 0; color: #0f1e5a; }
+  h2 { font-size: 12pt; margin: 18px 0 6px; color: #0f1e5a;
+       border-bottom: 2px solid #0f1e5a; padding-bottom: 3px; }
+  .cab { display: flex; justify-content: space-between; align-items: flex-start;
+         border-bottom: 3px solid #0f1e5a; padding-bottom: 10px; margin-bottom: 4px; }
+  .folio { font-size: 15pt; font-weight: 800; color: #0f1e5a; }
+  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; margin-top: 10px; }
+  .dato { padding: 4px 0; border-bottom: 1px solid #e5e7eb; }
+  .dato .e { font-size: 8pt; text-transform: uppercase; letter-spacing: .04em;
+             color: #6b7280; font-weight: 700; display: block; }
+  .dato .v { font-size: 11.5pt; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 3px 0; vertical-align: top; border-bottom: 1px solid #f3f4f6; }
+  td.r { width: 26px; font-weight: 800; }
+  td.a { width: 46px; text-align: right; font-size: 10pt; color: #6b7280; }
+  .si { color: #15803d; } .no { color: #b91c1c; }
+  .nota { background: #f3f4f6; border-left: 4px solid #9ca3af; padding: 7px 10px;
+          margin: 7px 0 2px; font-size: 10.5pt; white-space: pre-wrap; }
+  .fotos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .foto { border: 1px solid #e5e7eb; padding: 4px; }
+  .foto img { width: 100%; display: block; }
+  .foto .pie { font-size: 8.5pt; color: #6b7280; padding-top: 3px; }
+  .com { border-left: 4px solid #0f1e5a; padding: 6px 10px; margin-bottom: 8px;
+         background: #f8fafc; }
+  .com .q { font-size: 9.5pt; font-weight: 800; color: #0f1e5a; }
+  .com .c { font-size: 9pt; color: #6b7280; font-weight: 400; }
+  .com .b { white-space: pre-wrap; margin-top: 2px; }
+  .pie-doc { margin-top: 22px; padding-top: 8px; border-top: 1px solid #e5e7eb;
+             font-size: 9pt; color: #6b7280; }
+  .vacio { color: #6b7280; font-style: italic; }
+  h2, .foto, .com { break-inside: avoid; page-break-inside: avoid; }
+`;
+
+// Abre la ventana, espera a que carguen las fotos y manda a imprimir. Sin la
+// espera, el cuadro de impresión sale con los huecos en blanco: las imágenes
+// vienen de enlaces firmados y tardan un momento.
+function imprimir(titulo, cuerpoHtml) {
+  const v = window.open('', '_blank');
+  if (!v) { alert(t('pdf_aviso')); return; }
+
+  v.document.open();
+  v.document.write(
+    '<!DOCTYPE html><html lang="' + IDIOMA + '"><head><meta charset="utf-8">' +
+    '<title>' + esc(titulo) + '</title><style>' + ESTILO_PDF + '</style></head><body>' +
+    cuerpoHtml + '</body></html>');
+  v.document.close();
+
+  const imgs = Array.from(v.document.images);
+  let faltan = imgs.filter((i) => !i.complete).length;
+
+  const lanzar = () => { try { v.focus(); v.print(); } catch (e) { /* la cerró */ } };
+
+  if (faltan === 0) { setTimeout(lanzar, 120); return; }
+
+  let yaFue = false;
+  const quizas = () => { if (!yaFue && faltan === 0) { yaFue = true; setTimeout(lanzar, 120); } };
+  imgs.forEach((i) => {
+    if (i.complete) return;
+    const menos = () => { faltan--; quizas(); };
+    i.addEventListener('load', menos);
+    i.addEventListener('error', menos);   // una foto rota no bloquea el resto
+  });
+  // Red mala: a los 12 segundos se imprime con lo que haya llegado.
+  setTimeout(() => { if (!yaFue) { yaFue = true; lanzar(); } }, 12000);
+}
+
+function bloqueDatos(pares) {
+  return '<div class="datos">' + pares.map((p) =>
+    '<div class="dato"><span class="e">' + esc(p[0]) + '</span>' +
+    '<span class="v">' + (texto(p[1]) ? esc(p[1]) : '—') + '</span></div>').join('') + '</div>';
+}
+
+function pdfVehiculo() {
+  if (!ABIERTO || ABIERTO.tipo !== 'vehiculo') return;
+  const f = ABIERTO.fila;
+  const com = ABIERTO.comentarios || {};
+
+  let h = '<div class="cab"><div><h1>' + esc(t('pdf_titulo')) + '</h1>' +
+          '<div style="font-size:10pt;color:#6b7280">SPIE North America · HSE</div></div>' +
+          '<div class="folio">' + esc(f.report_code) + '</div></div>';
+
+  h += bloqueDatos([
+    [t('t_fecha'), f.inspection_date],
+    [t('t_conductor'), f.driver_name],
+    [t('t_placa'), f.license_plate],
+    [t('t_odometro'), f.odometer],
+    [t('t_coordinador'), f.coordinador],
+    [t('t_pais'), f.country],
+    [t('t_sitio'), f.site],
+    [t('t_deficiencias'), f.deficiencies],
+  ]);
+
+  // Las respuestas, por secciones, y el comentario que el técnico escribió en
+  // cada una justo debajo de ella. El comentario se enlaza por el prefijo del
+  // código (EXT_, INT_, OPE_, HOOD_) y no por el nombre de la sección, que
+  // viene traducido y cambiaría de un idioma a otro.
+  const porPrefijo = { EXT: com.ext_comments, INT: com.int_comments,
+                       OPE: com.ope_comments, HOOD: com.hood_comments };
+
+  // La marca dice si está BIEN o MAL, no lo que se contestó: una fuga de
+  // líquidos se contesta "sí" y es un problema, y verla con una palomita
+  // roja se lee al revés de lo que es. Lo contestado va en su columna.
+  const marca = (q) => q.es_deficiencia
+    ? '<td class="r no">&#10007;</td>'
+    : '<td class="r si">&#10003;</td>';
+
+  let seccion = null, abierta = false, prefijo = null;
+
+  const cerrar = () => {
+    if (!abierta) return;
+    h += '</table>';
+    const nota = prefijo ? porPrefijo[prefijo] : null;
+    if (texto(nota).trim() !== '') h += '<div class="nota">' + esc(nota) + '</div>';
+    abierta = false;
+  };
+
+  (ABIERTO.respuestas || []).forEach((q) => {
+    if (q.seccion !== seccion) {
+      cerrar();
+      seccion = q.seccion;
+      prefijo = (texto(q.code).split('_')[0]) || null;
+      h += '<h2>' + esc(seccion) + '</h2><table>';
+      abierta = true;
+    }
+    h += '<tr>' + marca(q) + '<td>' + esc(q.pregunta) + '</td>' +
+         '<td class="a">' + esc(q.respuesta ? t('v_si') : t('v_no')) + '</td></tr>';
+  });
+  cerrar();
+
+  if (texto(com.additional_comments).trim() !== '') {
+    h += '<h2>' + esc(t('pdf_adicional')) + '</h2>' +
+         '<div class="nota">' + esc(com.additional_comments) + '</div>';
+  }
+
+  // Fotos
+  h += '<h2>' + esc(t('t_fotos')) + '</h2>';
+  const fotos = (ABIERTO.archivos || []).filter((a) => a.url);
+  if (fotos.length === 0) {
+    h += '<p class="vacio">' + esc(t('pdf_sin_fotos')) + '</p>';
+  } else {
+    h += '<div class="fotos">' + fotos.map((a) =>
+      '<div class="foto"><img src="' + esc(a.url) + '" alt="">' +
+      '<div class="pie">' + esc(a.slot ? String(a.slot).replace('PHOTO_', '') : a.file_name) +
+      '</div></div>').join('') + '</div>';
+  }
+
+  // El hilo de seguimiento
+  h += '<h2>' + esc(t('com_titulo')) + '</h2>';
+  const hilo = ABIERTO.hilo || [];
+  if (hilo.length === 0) {
+    h += '<p class="vacio">' + esc(t('pdf_sin_com')) + '</p>';
+  } else {
+    h += hilo.map((c) =>
+      '<div class="com"><div class="q">' + esc(c.author_name) +
+      '<span class="c"> · ' + esc(cuando(c.created_at)) + '</span></div>' +
+      '<div class="b">' + esc(c.body) + '</div></div>').join('');
+  }
+
+  h += '<div class="pie-doc">' + esc(t('pdf_generado')
+        .replace('{fecha}', new Date().toLocaleString())
+        .replace('{quien}', (USUARIO && USUARIO.full_name) || '')) + '</div>';
+
+  imprimir(f.report_code, h);
 }
 
 
