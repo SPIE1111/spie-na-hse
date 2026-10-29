@@ -1996,6 +1996,36 @@ async function darDeAlta() {
 // sorprenda.
 // ══════════════════════════════════════════════════════════════════════════
 
+// El logo del documento es el mismo archivo que usa la aplicación, no una
+// copia ni un dibujo: se lee de ./icon-192.png, el que ya está en la raíz
+// del proyecto.
+//
+// Se convierte a datos incrustados porque la ventana de impresión se abre en
+// blanco y una ruta relativa dentro de ella no apunta a ninguna parte. Se
+// guarda en memoria para no releerlo en cada descarga.
+//
+// Si por lo que sea no se puede leer, el PDF sale sin logo y ya está: nadie
+// se queda sin su documento por una imagen.
+let LOGO_PDF = null;
+
+async function logoParaPdf() {
+  if (LOGO_PDF !== null) return LOGO_PDF;
+  try {
+    const r = await fetch(new URL('./icon-192.png', location.href).href, { cache: 'force-cache' });
+    if (!r.ok) throw new Error(String(r.status));
+    const blob = await r.blob();
+    LOGO_PDF = await new Promise((listo) => {
+      const fr = new FileReader();
+      fr.onload = () => listo(String(fr.result || ''));
+      fr.onerror = () => listo('');
+      fr.readAsDataURL(blob);
+    });
+  } catch (e) {
+    LOGO_PDF = '';
+  }
+  return LOGO_PDF;
+}
+
 function esc(v) {
   return texto(v).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -2015,8 +2045,10 @@ const ESTILO_PDF = `
   h2 { font-size: 12pt; margin: 18px 0 6px; color: #0f1e5a;
        border-bottom: 2px solid #0f1e5a; padding-bottom: 3px; }
   .cab { display: flex; justify-content: space-between; align-items: flex-start;
-         border-bottom: 3px solid #0f1e5a; padding-bottom: 10px; margin-bottom: 4px; }
-  .folio { font-size: 15pt; font-weight: 800; color: #0f1e5a; }
+         border-bottom: 3px solid #0f1e5a; padding-bottom: 10px; margin-bottom: 4px; gap: 18px; }
+  .cab-dcha { text-align: right; flex-shrink: 0; }
+  .cab-dcha img { height: 46px; width: auto; display: block; margin-left: auto; }
+  .folio { font-size: 15pt; font-weight: 800; color: #0f1e5a; margin-top: 6px; }
   .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; margin-top: 10px; }
   .dato { padding: 4px 0; border-bottom: 1px solid #e5e7eb; }
   .dato .e { font-size: 8pt; text-transform: uppercase; letter-spacing: .04em;
@@ -2083,14 +2115,21 @@ function bloqueDatos(pares) {
     '<span class="v">' + (texto(p[1]) ? esc(p[1]) : '—') + '</span></div>').join('') + '</div>';
 }
 
-function pdfVehiculo() {
+async function pdfVehiculo() {
   if (!ABIERTO || ABIERTO.tipo !== 'vehiculo') return;
   const f = ABIERTO.fila;
   const com = ABIERTO.comentarios || {};
 
+  // El logo se pide antes de armar nada: va en la cabecera, y la cabecera es
+  // lo primero que se escribe.
+  const logo = await logoParaPdf();
+
   let h = '<div class="cab"><div><h1>' + esc(t('pdf_titulo')) + '</h1>' +
           '<div style="font-size:10pt;color:#6b7280">SPIE North America · HSE</div></div>' +
-          '<div class="folio">' + esc(f.report_code) + '</div></div>';
+          '<div class="cab-dcha">' +
+            (logo ? '<img src="' + logo + '" alt="SPIE">' : '') +
+            '<div class="folio">' + esc(f.report_code) + '</div>' +
+          '</div></div>';
 
   h += bloqueDatos([
     [t('t_fecha'), f.inspection_date],
