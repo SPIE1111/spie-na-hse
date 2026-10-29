@@ -2523,13 +2523,38 @@ function mostrarListoVeh(folio) {
 // cuadro de impresión, y así se dice en la pantalla.
 // ══════════════════════════════════════════════════════════════════════════
 
+// El logo sale del mismo ./icon-192.png que ya usa la aplicación. Va
+// incrustado como datos porque la ventana de impresión se abre en blanco y
+// una ruta relativa ahí dentro no apunta a nada. Se guarda en memoria para
+// no releerlo cada vez, y si no se puede leer el PDF sale sin logo: nadie se
+// queda sin su documento por una imagen.
+let LOGO_PDF = null;
+
+async function logoParaPdf() {
+  if (LOGO_PDF !== null) return LOGO_PDF;
+  try {
+    const r = await fetch(new URL('./icon-192.png', location.href).href, { cache: 'force-cache' });
+    if (!r.ok) throw new Error(String(r.status));
+    const blob = await r.blob();
+    LOGO_PDF = await new Promise((listo) => {
+      const fr = new FileReader();
+      fr.onload = () => listo(String(fr.result || ''));
+      fr.onerror = () => listo('');
+      fr.readAsDataURL(blob);
+    });
+  } catch (e) {
+    LOGO_PDF = '';
+  }
+  return LOGO_PDF;
+}
+
 function escPdf(v) {
   return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 }
 
-function pdfInspeccion() {
+async function pdfInspeccion() {
   const u = ULTIMA_INSPECCION;
   if (!u) return;
 
@@ -2541,8 +2566,10 @@ function pdfInspeccion() {
     'h1{font-size:17pt;margin:0;color:#0f1e5a}' +
     'h2{font-size:12pt;margin:18px 0 6px;color:#0f1e5a;border-bottom:2px solid #0f1e5a;padding-bottom:3px}' +
     '.cab{display:flex;justify-content:space-between;align-items:flex-start;' +
-      'border-bottom:3px solid #0f1e5a;padding-bottom:10px}' +
-    '.folio{font-size:15pt;font-weight:800;color:#0f1e5a}' +
+      'border-bottom:3px solid #0f1e5a;padding-bottom:10px;gap:18px}' +
+    '.cab-dcha{text-align:right;flex-shrink:0}' +
+    '.cab-dcha img{height:46px;width:auto;display:block;margin-left:auto}' +
+    '.folio{font-size:15pt;font-weight:800;color:#0f1e5a;margin-top:6px}' +
     '.datos{display:grid;grid-template-columns:1fr 1fr;gap:2px 20px;margin-top:10px}' +
     '.dato{padding:4px 0;border-bottom:1px solid #e5e7eb}' +
     '.dato .e{font-size:8pt;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;' +
@@ -2558,7 +2585,8 @@ function pdfInspeccion() {
     '.foto{border:1px solid #e5e7eb;padding:4px}' +
     '.foto img{width:100%;display:block}' +
     '.foto .pie{font-size:8.5pt;color:#6b7280;padding-top:3px}' +
-    '.pie-doc{margin-top:22px;padding-top:8px;border-top:1px solid #e5e7eb;font-size:9pt;color:#6b7280}' +
+    '.pie-doc{margin-top:22px;padding-top:8px;border-top:1px solid #e5e7eb;font-size:9pt;' +
+      'color:#6b7280}' +
     '.vacio{color:#6b7280;font-style:italic}' +
     'h2,.foto{break-inside:avoid;page-break-inside:avoid}';
 
@@ -2572,9 +2600,15 @@ function pdfInspeccion() {
     ['Folio', u.folio],
   ];
 
+  // El logo se pide antes de armar nada: va en la cabecera.
+  const logo = await logoParaPdf();
+
   let h = '<div class="cab"><div><h1>' + escPdf(t('pdf_titulo')) + '</h1>' +
           '<div style="font-size:10pt;color:#6b7280">SPIE North America · HSE</div></div>' +
-          '<div class="folio">' + escPdf(u.folio) + '</div></div>';
+          '<div class="cab-dcha">' +
+            (logo ? '<img src="' + logo + '" alt="SPIE">' : '') +
+            '<div class="folio">' + escPdf(u.folio) + '</div>' +
+          '</div></div>';
 
   h += '<div class="datos">' + pares.map((p) =>
     '<div class="dato"><span class="e">' + escPdf(p[0]) + '</span>' +
