@@ -481,6 +481,63 @@ const CONFIG = {
 };
 
 const API = CONFIG.SUPABASE_URL + '/functions/v1/panel-api';
+const API_DOC = CONFIG.SUPABASE_URL + '/functions/v1/inspeccion-doc';
+
+// El documento oficial de una inspección, en Excel o para imprimir.
+//
+// Lo arma el servidor a partir de lo que hay en la base. El panel no dibuja
+// el formato: así no puede discrepar del que baja la app de quien registró
+// la inspección, porque es el mismo archivo.
+//
+// Si el servidor no contesta, se abre el PDF que el panel sabe hacer solo.
+async function descargarDoc(folio, formato) {
+  if (!folio) return;
+
+  const boton = document.getElementById(formato === 'xlsx' ? 'doc-xlsx' : 'doc-pdf');
+  const antes = boton ? boton.textContent : '';
+  if (boton) { boton.disabled = true; boton.textContent = t('doc_bajando'); }
+
+  // La ventana se abre ANTES de pedir el archivo, o el navegador la toma por
+  // emergente y la bloquea.
+  const ventana = (formato === 'html') ? window.open('', '_blank') : null;
+
+  try {
+    const r = await fetch(API_DOC, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + CONFIG.ANON_KEY,
+      },
+      body: JSON.stringify({ report_code: folio, token: TOKEN, formato: formato, lang: IDIOMA || 'es' }),
+    });
+    if (!r.ok) throw new Error('http ' + r.status);
+
+    if (formato === 'html') {
+      const html = await r.text();
+      if (!ventana) { alert(t('pdf_aviso')); return; }
+      ventana.document.open();
+      ventana.document.write(html);
+      ventana.document.close();
+    } else {
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = folio + '.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+  } catch (e) {
+    if (ventana) { try { ventana.close(); } catch (_e) {} }
+    alert(t('doc_error'));
+    try { pdfVehiculo(); } catch (_e) {}
+  } finally {
+    if (boton) { boton.disabled = false; boton.textContent = antes; }
+  }
+}
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -548,6 +605,9 @@ const TEXTOS = {
     com_poner: 'Escribe qué se hizo con este reporte…',
     com_enviar: 'Agregar comentario',
     pdf_btn: 'Descargar en PDF',
+    doc_excel: 'Descargar en Excel',
+    doc_bajando: 'Preparando el archivo…',
+    doc_error: 'No se pudo bajar el documento. Se abre la versión del panel.',
     pdf_aviso: 'Se abre el cuadro de impresión: elige «Guardar como PDF» como destino.',
     pdf_titulo: 'Inspección de vehículo',
     pdf_sin_fotos: 'Sin fotos.',
@@ -670,6 +730,9 @@ const TEXTOS = {
     com_poner: 'Write what was done about this report…',
     com_enviar: 'Add note',
     pdf_btn: 'Download as PDF',
+    doc_excel: 'Download as Excel',
+    doc_bajando: 'Preparing the file…',
+    doc_error: 'The document could not be downloaded. Opening the panel version.',
     pdf_aviso: 'The print dialog opens: choose "Save as PDF" as the destination.',
     pdf_titulo: 'Vehicle inspection',
     pdf_sin_fotos: 'No photos.',
@@ -1539,16 +1602,28 @@ async function pintarSeguimiento(cont, folio) {
     pie.style.paddingTop = '18px';
     pie.style.borderTop = '2px solid var(--linea)';
 
+    // El Excel y el PDF con el formato del documento oficial los arma el
+    // servidor. Es la MISMA función que usa la app del técnico: el reporte
+    // que baja el panel y el que baja quien lo registró son el mismo archivo.
+    const bx = document.createElement('button');
+    bx.className = 'btn secundario';
+    bx.id = 'doc-xlsx';
+    bx.textContent = t('doc_excel');
+    bx.onclick = () => descargarDoc(folio, 'xlsx');
+
     const bp = document.createElement('button');
     bp.className = 'btn secundario';
+    bp.id = 'doc-pdf';
+    bp.style.marginLeft = '8px';
     bp.textContent = t('pdf_btn');
-    bp.onclick = () => pdfVehiculo();
+    bp.onclick = () => descargarDoc(folio, 'html');
 
     const nota = document.createElement('div');
     nota.className = 'cuenta';
     nota.style.marginTop = '8px';
     nota.textContent = t('pdf_aviso');
 
+    pie.appendChild(bx);
     pie.appendChild(bp);
     pie.appendChild(nota);
     cont.appendChild(pie);
