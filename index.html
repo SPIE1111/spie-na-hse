@@ -571,7 +571,8 @@
       <p class="sub" id="listo-detalle" style="margin-top:10px"></p>
     </div>
     <div id="listo-pdf" style="display:none">
-      <button class="btn secundario" onclick="pdfInspeccion()" data-t="pdf_btn"></button>
+      <button class="btn secundario" id="btn-doc-xlsx" onclick="descargarDoc('xlsx')" data-t="doc_excel"></button>
+      <button class="btn secundario" id="btn-doc-pdf" onclick="descargarDoc('html')" data-t="pdf_btn"></button>
       <p class="pie" data-t="pdf_aviso"></p>
     </div>
     <button class="btn" onclick="ir('p-tipo')" data-t="listo_otro"></button>
@@ -686,6 +687,9 @@ const TEXTOS = {
     v_listo_titulo:    'Inspección enviada',
     v_listo_detalle:   'Guárdate el folio por si necesitas consultarla después.',
     pdf_btn:           'Descargar en PDF',
+    doc_excel:         'Descargar en Excel',
+    doc_bajando:       'Preparando el archivo…',
+    doc_error:         'No se pudo bajar el documento del servidor. Se abre la versión del teléfono.',
     pdf_aviso:         'Se abre el cuadro de impresión: elige «Guardar como PDF».',
     pdf_titulo:        'Inspección de vehículo',
     pdf_coment:        'Comentarios',
@@ -800,6 +804,9 @@ const TEXTOS = {
     v_listo_titulo:    'Inspection submitted',
     v_listo_detalle:   'Keep the number in case you need to look it up later.',
     pdf_btn:           'Download as PDF',
+    doc_excel:         'Download as Excel',
+    doc_bajando:       'Preparing the file…',
+    doc_error:         'The server copy could not be downloaded. Opening the phone version instead.',
     pdf_aviso:         'The print dialog opens: choose "Save as PDF".',
     pdf_titulo:        'Vehicle inspection',
     pdf_coment:        'Comments',
@@ -2783,6 +2790,81 @@ async function pdfInspeccion() {
   // descargar; aun así se espera un instante a que el navegador las pinte.
   setTimeout(() => { try { v.focus(); v.print(); } catch (e) { /* la cerró */ } }, 400);
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// 8d · EL DOCUMENTO OFICIAL
+//
+// El Excel y el PDF con el formato del documento de SPIE los arma el
+// servidor, no el teléfono. Es a propósito: el panel baja exactamente el
+// mismo archivo llamando a la misma función, así que no pueden salir dos
+// versiones distintas del mismo reporte.
+//
+// Si no hay señal —o el servidor no contesta— se abre la versión que el
+// teléfono sabe hacer solo. Es más sencilla, pero nadie se queda sin su
+// comprobante.
+// ══════════════════════════════════════════════════════════════════════════
+const API_DOC = CONFIG.SUPABASE_URL + '/functions/v1/inspeccion-doc';
+
+async function descargarDoc(formato) {
+  const u = ULTIMA_INSPECCION;
+  const folio = u && u.folio;
+
+  // Sin folio es que se guardó en la cola, sin señal: todavía no existe en
+  // el servidor y no hay nada que pedirle.
+  if (!folio || !navigator.onLine) { pdfInspeccion(); return; }
+
+  const boton = document.getElementById(formato === 'xlsx' ? 'btn-doc-xlsx' : 'btn-doc-pdf');
+  const antes = boton ? boton.textContent : '';
+  if (boton) { boton.disabled = true; boton.textContent = t('doc_bajando'); }
+
+  // La ventana del PDF se abre ANTES de pedir el archivo: si se abriera
+  // después, el navegador la tomaría por una ventana emergente y la
+  // bloquearía.
+  const ventana = (formato === 'html') ? window.open('', '_blank') : null;
+
+  try {
+    const r = await fetch(API_DOC, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + CONFIG.ANON_KEY,
+      },
+      body: JSON.stringify({
+        report_code: folio,
+        employee_no: (SESION && SESION.employee_no) || '',
+        formato: formato,
+        lang: IDIOMA || 'es',
+      }),
+    });
+    if (!r.ok) throw new Error('http ' + r.status);
+
+    if (formato === 'html') {
+      const html = await r.text();
+      if (!ventana) { alert(t('pdf_aviso')); return; }
+      ventana.document.open();
+      ventana.document.write(html);
+      ventana.document.close();
+    } else {
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = folio + '.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+  } catch (e) {
+    if (ventana) { try { ventana.close(); } catch (_e) {} }
+    alert(t('doc_error'));
+    pdfInspeccion();
+  } finally {
+    if (boton) { boton.disabled = false; boton.textContent = antes; }
+  }
+}
+
 
 // La etiqueta de una pregunta, en el idioma que esté puesto.
 function preguntaLabel(code) {
