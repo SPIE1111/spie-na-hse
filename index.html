@@ -310,6 +310,12 @@
   }
   .sino-btn.elegido { background: var(--azul); color: #fff; }
   .sino-btn.elegido.malo { background: var(--rojo); border-color: var(--rojo); }
+
+  /* El porqué de una respuesta que salió mal. Va pegado a su pregunta y con
+     el filo rojo, para que se vea que es parte de ella y no un campo suelto. */
+  .por-que-et { display: block; margin: 11px 0 5px; font-size: 13px; font-weight: 700;
+                color: var(--rojo); text-transform: none; letter-spacing: 0; }
+  .por-que { border-color: var(--rojo); min-height: 64px; }
   .foto-slot {
     position: relative; border-radius: var(--radio); overflow: hidden;
     border: 2px solid var(--linea); background: var(--blanco); aspect-ratio: 4/3; max-width: 260px;
@@ -669,7 +675,9 @@ const TEXTOS = {
     pendientes_uno:    '1 reporte esperando señal para enviarse',
     pendientes_varios: '{n} reportes esperando señal para enviarse',
 
-    v_paso:            'Paso {n} de 5',
+    v_paso:            'Paso {n} de {t}',
+    v_por_que:         '¿Por qué? Explica qué encontraste',
+    v_falta_por_que:   'Esta respuesta indica un problema. Escribe por qué antes de seguir.',
     v_si:              'Sí',
     v_no:              'No',
     v_pais:            'País de operaciones',
@@ -781,7 +789,9 @@ const TEXTOS = {
     pendientes_uno:    '1 report waiting for signal',
     pendientes_varios: '{n} reports waiting for signal',
 
-    v_paso:            'Step {n} of 5',
+    v_paso:            'Step {n} of {t}',
+    v_por_que:         'Why? Describe what you found',
+    v_falta_por_que:   'This answer flags a problem. Write why before moving on.',
     v_si:              'Yes',
     v_no:              'No',
     v_pais:            'Country of operations',
@@ -1913,22 +1923,25 @@ function mostrarListo(folio) {
 // botón de "todo bien". Las 5 fotos son obligatorias.
 // ══════════════════════════════════════════════════════════════════════════
 
-const VEH_PASOS = 5;
+// Un paso por sección, y las secciones las manda la base. Antes estaban
+// escritas aquí: cinco pasos con nombres fijos. Con la versión 6 del
+// formulario son otras, y con la que venga después serán otras más, así que
+// la lista se arma sola al abrir el formulario.
+let VEH_SECS = [];     // las secciones con contenido, en el orden del documento
 
-// Qué secciones del catálogo salen en cada paso.
-const VEH_MAPA = [
-  ['vehicle_data'],
-  ['vehicle_exterior'],
-  ['vehicle_interior'],
-  ['vehicle_operating'],
-  ['vehicle_hood', 'vehicle_comments'],
-];
+function vehPasos() {
+  return VEH_SECS.length || 1;
+}
+
+// Los dos datos del encabezado que el documento no obliga a llenar. Si algún
+// día hay que exigirlos, se quitan de aquí y ya.
+const VEH_OPCIONALES = ['PROJECT_NO', 'PROJECT_MANAGER'];
 
 let VEH_PASO = 1;
 let VEH = null;        // { pais, site_id, respuestas:{}, comentarios:{} }
 let VEH_FOTOS = {};    // { PHOTO_FRONT: {nombre, mime, base64, vista}, … }
 let VEH_SLOT = null;   // a qué ranura va la foto que se está eligiendo
-let VEH_NUM = {};      // código → número de pregunta (1 … 47)
+let VEH_NUM = {};      // código → número de pregunta (solo las de sí/no)
 let VEH_PREG = {};     // código → la pregunta completa
 
 function seccionVeh(clave) {
@@ -1936,23 +1949,30 @@ function seccionVeh(clave) {
 }
 
 function seccionesDelPaso(paso) {
-  return VEH_MAPA[paso - 1].map(seccionVeh).filter(Boolean);
+  const sec = VEH_SECS[paso - 1];
+  return sec ? [sec] : [];
 }
 
-// Numera las 47 preguntas de corrido, en el orden del formulario.
+// Arma los pasos y numera las preguntas.
+//
+// Se numeran SOLO las de sí/no, y de corrido: así el número que ve la persona
+// en el teléfono es el mismo que lleva la pregunta en el documento impreso.
+// Los datos del vehículo y las fotos no llevan número, porque en el documento
+// tampoco lo llevan.
 function numerarVeh() {
   VEH_NUM = {};
   VEH_PREG = {};
+  VEH_SECS = ((CATALOGOS && CATALOGOS.vehiculo) || [])
+    .filter((sec) => sec && (sec.preguntas || []).length > 0);
+
   let n = 0;
-  VEH_MAPA.forEach(function (claves) {
-    claves.forEach(function (clave) {
-      const sec = seccionVeh(clave);
-      if (!sec) return;
-      (sec.preguntas || []).forEach(function (p) {
+  VEH_SECS.forEach(function (sec) {
+    (sec.preguntas || []).forEach(function (p) {
+      if (p.answer_type === 'yesno') {
         n += 1;
         VEH_NUM[p.code] = n;
-        VEH_PREG[p.code] = p;
-      });
+      }
+      VEH_PREG[p.code] = p;
     });
   });
 }
@@ -2019,11 +2039,18 @@ function limpiarErrorVeh() {
 // ── Dibujo del paso ───────────────────────────────────────────────────────
 
 function vehPintarPaso() {
-  const pasos = document.getElementById('veh-pasos').children;
+  // Los puntos son tantos como secciones traiga el formulario.
+  const barra = document.getElementById('veh-pasos');
+  if (barra.children.length !== vehPasos()) {
+    barra.innerHTML = '';
+    for (let i = 0; i < vehPasos(); i++) barra.appendChild(document.createElement('span'));
+  }
+  const pasos = barra.children;
   for (let i = 0; i < pasos.length; i++) {
     pasos[i].className = (i < VEH_PASO) ? 'hecho' : '';
   }
-  document.getElementById('veh-paso-de').textContent = t('v_paso').replace('{n}', VEH_PASO);
+  document.getElementById('veh-paso-de').textContent =
+    t('v_paso').replace('{n}', VEH_PASO).replace('{t}', vehPasos());
 
   const secs = seccionesDelPaso(VEH_PASO);
   document.getElementById('veh-titulo').textContent = secs.length ? secs[0].titulo : '';
@@ -2048,7 +2075,7 @@ function vehPintarPaso() {
 
   document.getElementById('v-atras').style.visibility = (VEH_PASO === 1) ? 'hidden' : 'visible';
   document.getElementById('v-siguiente').textContent =
-    (VEH_PASO === VEH_PASOS) ? t('v_enviar') : t('siguiente');
+    (VEH_PASO === vehPasos()) ? t('v_enviar') : t('siguiente');
 
   actualizarResumenVeh();
   limpiarErrorVeh();
@@ -2065,10 +2092,12 @@ function pintarPreguntaVeh(p) {
 function etiquetaVeh(p, obligatoria) {
   const l = document.createElement('div');
   l.className = 'pregunta-texto';
-  const n = document.createElement('span');
-  n.className = 'pregunta-num';
-  n.textContent = VEH_NUM[p.code] + ' · ';
-  l.appendChild(n);
+  if (VEH_NUM[p.code]) {
+    const n = document.createElement('span');
+    n.className = 'pregunta-num';
+    n.textContent = VEH_NUM[p.code] + ' · ';
+    l.appendChild(n);
+  }
   l.appendChild(document.createTextNode(p.label));
   if (obligatoria) {
     const r = document.createElement('span');
@@ -2098,12 +2127,43 @@ function filaSiNo(p) {
     g.appendChild(b);
   });
   d.appendChild(g);
+
+  // Si la respuesta indica un problema, aquí mismo aparece el porqué. Va
+  // pegada a su pregunta y no al final de la sección: así el motivo queda
+  // unido a lo que lo provocó, y es lo que se imprime en la columna de
+  // Comentarios del documento.
+  if (esDeficiencia(p, VEH.respuestas[p.code])) {
+    const aviso = document.createElement('label');
+    aviso.className = 'por-que-et';
+    aviso.textContent = t('v_por_que');
+    const r = document.createElement('span');
+    r.className = 'obligatorio';
+    r.textContent = ' *';
+    aviso.appendChild(r);
+
+    const ta = document.createElement('textarea');
+    ta.className = 'por-que';
+    ta.id = 'v-why-' + p.code;
+    ta.rows = 2;
+    ta.value = VEH.comentarios[p.code] || '';
+    ta.oninput = function () {
+      VEH.comentarios[p.code] = ta.value;
+      limpiarErrorVeh();
+    };
+    d.appendChild(aviso);
+    d.appendChild(ta);
+  }
+
   return d;
 }
 
 // Se redibuja SOLO la pregunta tocada. Redibujar el paso entero borraría lo
 // que la persona lleve escrito en las cajas de comentarios.
+//
+// Y si vuelve a pulsar la MISMA respuesta no se redibuja nada: hacerlo
+// borraría el porqué que acabara de escribir.
 function responderVeh(code, valor) {
+  if (VEH.respuestas[code] === valor) return;
   VEH.respuestas[code] = valor;
   const fila = document.getElementById('veh-q-' + code);
   if (fila && fila.parentNode) fila.parentNode.replaceChild(filaSiNo(VEH_PREG[code]), fila);
@@ -2324,35 +2384,47 @@ function avisarFalta(code, texto) {
 
 function vehValidarPaso() {
   const secs = seccionesDelPaso(VEH_PASO);
-
-  if (VEH_PASO === 1) {
-    const dato = (code) => (((VEH.datos || {})[code]) || '').trim();
-
-    if (!dato('DRIVER_NAME'))   { errorVeh(faltaVeh(VEH_PREG['DRIVER_NAME'].label)); return false; }
-    if (!dato('LICENSE_PLATE')) { errorVeh(faltaVeh(VEH_PREG['LICENSE_PLATE'].label)); return false; }
-
-    const odo = dato('ODOMETER');
-    if (odo === '' || !/^\d+$/.test(odo)) { errorVeh(t('v_odo_malo')); return false; }
-
-    const fecha = dato('INSPECTION_DATE');
-    if (!fecha) { errorVeh(faltaVeh(VEH_PREG['INSPECTION_DATE'].label)); return false; }
-    if (fecha > hoyLocal()) { errorVeh(t('v_fecha_futura')); return false; }
-
-    if (!VEH.site_id) { errorVeh(faltaVeh(t('v_sitio'))); return false; }
-    return true;
-  }
+  const dato = (code) => (((VEH.datos || {})[code]) || '').trim();
 
   // Se revisa en el MISMO orden en que la persona ve las preguntas, para que
   // el aviso señale lo primero que le falta y no lo último.
   for (const sec of secs) {
     for (const p of (sec.preguntas || [])) {
-      if (p.answer_type === 'yesno' && VEH.respuestas[p.code] === undefined) {
-        return avisarFalta(p.code, faltaVeh(VEH_NUM[p.code] + ' · ' + p.label));
+
+      // ── Datos del vehículo ──
+      // Ya no van escritos aquí uno por uno: se recorre lo que traiga la
+      // sección. Si mañana el documento pide un dato más, la app lo exige
+      // sin tocar este archivo.
+      if (p.answer_type === 'text' || p.answer_type === 'number' || p.answer_type === 'date') {
+        const v = dato(p.code);
+        if (!v) {
+          if (VEH_OPCIONALES.indexOf(p.code) >= 0) continue;
+          return avisarFalta(p.code, faltaVeh(p.label));
+        }
+        if (p.code === 'ODOMETER' && !/^\d+$/.test(v)) {
+          return avisarFalta(p.code, t('v_odo_malo'));
+        }
+        if (p.answer_type === 'date' && v > hoyLocal()) {
+          return avisarFalta(p.code, t('v_fecha_futura'));
+        }
+        continue;
       }
 
-      // Una deficiencia sin explicación no le sirve a quien tiene que
-      // arreglar el vehículo: el comentario de la sección se vuelve
-      // obligatorio en cuanto algo sale mal.
+      // ── Preguntas de sí/no ──
+      if (p.answer_type === 'yesno') {
+        if (VEH.respuestas[p.code] === undefined) {
+          return avisarFalta(p.code, faltaVeh(VEH_NUM[p.code] + ' · ' + p.label));
+        }
+        // Una respuesta que indica un problema sin explicación no le sirve a
+        // quien tiene que arreglar el vehículo.
+        if (esDeficiencia(p, VEH.respuestas[p.code])
+            && !((VEH.comentarios[p.code] || '').trim())) {
+          return avisarFalta(p.code, t('v_falta_por_que'));
+        }
+        continue;
+      }
+
+      // ── Comentario de sección, el del formulario viejo ──
       if (p.answer_type === 'longtext' && p.code !== 'ADDITIONAL_COMMENTS'
           && deficienciasDeSeccion(sec) > 0
           && !((VEH.comentarios[p.code] || '').trim())) {
@@ -2364,6 +2436,12 @@ function vehValidarPaso() {
       }
     }
   }
+
+  // El país y el sitio se eligen en el primer paso, debajo de los datos.
+  if (VEH_PASO === 1 && !VEH.site_id) {
+    errorVeh(faltaVeh(t('v_sitio')));
+    return false;
+  }
   return true;
 }
 
@@ -2373,7 +2451,7 @@ function vehPasoAtras() {
 
 function vehPasoSiguiente() {
   if (!vehValidarPaso()) return;
-  if (VEH_PASO < VEH_PASOS) { VEH_PASO += 1; vehPintarPaso(); return; }
+  if (VEH_PASO < vehPasos()) { VEH_PASO += 1; vehPintarPaso(); return; }
   enviarVehiculo();
 }
 
@@ -2385,8 +2463,12 @@ function armarInspeccion() {
   const com = (code) => ((VEH.comentarios[code] || '').trim() || null);
 
   const respuestas = {};
+  const porques = {};
   Object.keys(VEH_PREG).forEach(function (code) {
-    if (VEH_PREG[code].answer_type === 'yesno') respuestas[code] = VEH.respuestas[code];
+    if (VEH_PREG[code].answer_type !== 'yesno') return;
+    respuestas[code] = VEH.respuestas[code];
+    const motivo = (VEH.comentarios[code] || '').trim();
+    if (motivo) porques[code] = motivo;
   });
 
   return {
@@ -2398,6 +2480,17 @@ function armarInspeccion() {
     site_id:         VEH.site_id || null,
     site_other:      null,
     answers:         respuestas,
+    // El motivo de cada respuesta que salió mal, con el código de su
+    // pregunta. Es lo que acaba en la columna de Comentarios del documento.
+    comments:        porques,
+    // Con qué versión del formulario se llenó. La manda la base en los
+    // catálogos; si no viniera, la base usa la suya por omisión.
+    form_version:    (CATALOGOS && CATALOGOS.vehiculo_version) || null,
+    project_no:      dato('PROJECT_NO') || null,
+    project_manager: dato('PROJECT_MANAGER') || null,
+    // El país que se eligió arriba. Hace falta porque la mayoría de las
+    // fichas de empleado de Norteamérica no lo tienen.
+    country_code:    VEH.pais || null,
     ext_comments:        com('EXT_COMMENTS'),
     int_comments:        com('INT_COMMENTS'),
     ope_comments:        com('OPE_COMMENTS'),
@@ -2476,14 +2569,14 @@ let ULTIMA_INSPECCION = null;
 function guardarUltimaInspeccion(folio) {
   if (!VEH) { ULTIMA_INSPECCION = null; return; }
 
-  // La clave de la sección y la del campo de comentario no se parecen:
-  // vehicle_operating guarda su texto en OPE_COMMENTS. Van emparejadas a
-  // mano porque deducirlas da EXTERIOR_COMMENTS, que no existe.
-  const CLAVE_COM = {
-    vehicle_exterior:  'EXT_COMMENTS',
-    vehicle_interior:  'INT_COMMENTS',
-    vehicle_operating: 'OPE_COMMENTS',
-    vehicle_hood:      'HOOD_COMMENTS',
+  // El comentario de sección del formulario viejo. Antes estaba emparejado a
+  // mano —vehicle_operating guarda su texto en OPE_COMMENTS— y la versión 6
+  // ya no tiene esas cajas. Ahora se busca: es el campo de texto largo de la
+  // propia sección, si lo hay.
+  const comentarioDe = (sec) => {
+    const caja = (sec.preguntas || []).find(
+      (q) => q.answer_type === 'longtext' && q.code !== 'ADDITIONAL_COMMENTS');
+    return caja ? (VEH.comentarios[caja.code] || '') : '';
   };
 
   const secciones = ((CATALOGOS && CATALOGOS.vehiculo) || []).map((sec) => ({
@@ -2493,12 +2586,14 @@ function guardarUltimaInspeccion(folio) {
       .map((q) => ({
         label: q.label,
         respuesta: VEH.respuestas[q.code],
+        // El porqué que se escribió junto a la pregunta.
+        comentario: (VEH.comentarios[q.code] || ''),
         // Se usa la misma función que el formulario para decidir si una
         // respuesta es deficiencia, y no una copia: en "¿hay fuga?" lo malo
         // es el sí, y dos lógicas distintas acabarían discrepando.
         deficiencia: esDeficiencia(q, VEH.respuestas[q.code]),
       })),
-    comentario: (VEH.comentarios[CLAVE_COM[sec.key]] || ''),
+    comentario: comentarioDe(sec),
   })).filter((sec) => sec.preguntas.length > 0);
 
   ULTIMA_INSPECCION = {
@@ -2644,7 +2739,11 @@ async function pdfInspeccion() {
     sec.preguntas.forEach((q) => {
       h += '<tr><td class="r ' + (q.deficiencia ? 'no' : 'si') + '">' +
            (q.deficiencia ? '&#10007;' : '&#10003;') + '</td>' +
-           '<td>' + escPdf(q.label) + '</td>' +
+           '<td>' + escPdf(q.label) +
+           (String(q.comentario || '').trim()
+              ? '<div style="font-size:9.5pt;color:#b91c1c">' + escPdf(q.comentario) + '</div>'
+              : '') +
+           '</td>' +
            '<td class="a">' + escPdf(q.respuesta ? t('v_si') : t('v_no')) + '</td></tr>';
     });
     h += '</table>';
@@ -2721,12 +2820,18 @@ function queFaltaHse(c) {
 }
 
 function queFaltaVehiculo(c) {
-  if (!c || !c.ok)             return 'respuesta del servidor';
-  if (!listaCon(c.vehiculo))   return 'secciones del formulario de vehículo';
-  if (c.vehiculo.length !== 6) return 'secciones del vehículo (llegaron ' + c.vehiculo.length + ' de 6)';
+  if (!c || !c.ok)           return 'respuesta del servidor';
+  if (!listaCon(c.vehiculo)) return 'secciones del formulario de vehículo';
 
+  // Ya no se comprueba que sean seis: las secciones las decide la versión
+  // del formulario que esté vigente. Lo que sí tiene que haber son datos
+  // del vehículo y preguntas que contestar.
   const vacia = c.vehiculo.find((s) => !listaCon(s.preguntas));
   if (vacia) return 'preguntas de la sección ' + vacia.key;
+
+  const preguntas = c.vehiculo.reduce(
+    (n, s) => n + (s.preguntas || []).filter((p) => p.answer_type === 'yesno').length, 0);
+  if (preguntas === 0) return 'preguntas de sí/no del formulario de vehículo';
   return null;
 }
 
