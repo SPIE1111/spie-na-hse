@@ -688,6 +688,7 @@ const TEXTOS = {
     v_listo_detalle:   'Guárdate el folio por si necesitas consultarla después.',
     pdf_btn:           'Descargar en PDF',
     doc_excel:         'Descargar en Excel',
+    err_otra_region:   'Tu número sí existe, pero todavía no está habilitado en esta aplicación. Sigue usando la que vienes usando; te avisaremos cuando puedas entrar aquí.',
     doc_bajando:       'Preparando el archivo…',
     doc_error:         'No se pudo bajar el documento del servidor. Se abre la versión del teléfono.',
     pdf_aviso:         'Se abre el cuadro de impresión: elige «Guardar como PDF».',
@@ -805,6 +806,7 @@ const TEXTOS = {
     v_listo_detalle:   'Keep the number in case you need to look it up later.',
     pdf_btn:           'Download as PDF',
     doc_excel:         'Download as Excel',
+    err_otra_region:   'Your number exists, but it is not enabled in this app yet. Please keep using the app you have been using; we will let you know when you can come here.',
     doc_bajando:       'Preparing the file…',
     doc_error:         'The server copy could not be downloaded. Opening the phone version instead.',
     pdf_aviso:         'The print dialog opens: choose "Save as PDF".',
@@ -1073,6 +1075,10 @@ async function identificarNumero(numero) {
     if (!r.ok) {
       mostrarQuien(null);
       if (r.motivo === 'INACTIVO') mostrarError('err_inactivo');
+      // Esta persona existe, pero su región todavía no se atiende aquí.
+      // Decírselo claro vale más que un "no existe" que la dejaría buscando
+      // un error que no cometió.
+      else if (r.motivo === 'OTRA_REGION') mostrarError('err_otra_region');
       else if (r.motivo === 'NO_EXISTE' || r.motivo === 'DATOS_INVALIDOS') mostrarError('err_no_existe');
       else mostrarTexto(t('err_config') + ' ' + detalleServidor(r));
       return;
